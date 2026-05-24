@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# AIAR runtime state (vector store, grounding, logs, eval queue)
+.aiar/
+~/.aiar/
+
+# User RAG corpora — documents an AI collector fetched per a Collection Brief
+# (large + regenerable; the brief in briefs/ is the reproducible source of truth)
+corpus/
+
+# Local-only demo / recording scripts — never published
+DEMO_RECORDING.md
+*.local.md
+
+# Test / tooling
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

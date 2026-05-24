@@ -1,0 +1,29 @@
+{
+  "case_set_id": "acme-support-faq",
+  "notes": "Deterministic A/B rubric for the example corpus in examples/docs. Run RAG-on vs RAG-off to see retrieval lift.",
+  "cases": [
+    {
+      "id": "refund-window",
+      "prompt": "How many days do I have to request a refund?",
+      "rubric": [
+        {"id": "mentions-30-days", "weight": 2, "match_any": ["30 day", "thirty day", "30-day"]},
+        {"id": "no-hallucination", "weight": 1, "forbid_any": ["lifetime", "no refunds", "90 day", "60 day"]}
+      ]
+    },
+    {
+      "id": "weekend-chat",
+      "prompt": "Is live chat support available on weekends?",
+      "rubric": [
+        {"id": "says-weekdays-only", "weight": 2, "match_any": ["weekday", "monday", "no weekend", "not available on weekend"]},
+        {"id": "has-substance", "weight": 1, "min_length": 20}
+      ]
+    },
+    {
+      "id": "digital-refund",
+      "prompt": "Can I get a refund on a license key after I revealed it?",
+      "rubric": [
+        {"id": "says-non-refundable", "weight": 2, "match_any": ["non-refundable", "not refundable", "cannot", "no refund"]}
+      ]
+    }
+  ]
+}

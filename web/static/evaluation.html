@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIAR — Evaluation queue</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <nav class="page-nav" aria-label="Primary">
+          <a class="nav-pill" href="/">Simulate</a>
+          <a class="nav-pill" href="/activity">Activity</a>
+          <span class="nav-pill nav-pill-active">Evaluation queue</span>
+          <a class="nav-pill" href="/settings">Settings</a>
+        </nav>
+        <h1>Evaluation queue</h1>
+        <p class="tagline">Score each marked answer 1-10. A low score requires a correction — submitting it <strong>regrounds</strong> the prompt so the next answer improves.</p>
+      </header>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Pending reviews</h2>
+          <p id="queue-label" class="muted">Loading...</p>
+        </div>
+        <div id="queue"></div>
+      </section>
+    </main>
+    <script src="/evaluation.js"></script>
+  </body>
+</html>

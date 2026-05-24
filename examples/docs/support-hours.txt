@@ -1,0 +1,11 @@
+Acme Widgets — Support Hours and Contact
+
+Live chat support is available Monday through Friday, 9am to 6pm Eastern Time.
+There is no weekend live chat. Email support is monitored 7 days a week and
+replies arrive within one business day.
+
+Phone support is reserved for Enterprise-tier customers only. The phone line is
++1-555-0100 and operates during the same weekday hours as live chat.
+
+For urgent outages affecting Enterprise customers, a 24/7 on-call pager is
+available; the escalation address is oncall@example.com.

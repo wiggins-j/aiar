@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIAR — Activity</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <nav class="page-nav" aria-label="Primary">
+          <a class="nav-pill" href="/">Simulate</a>
+          <span class="nav-pill nav-pill-active">Activity</span>
+          <a class="nav-pill" href="/evaluation">Evaluation queue</a>
+          <a class="nav-pill" href="/settings">Settings</a>
+        </nav>
+        <h1>Recent activity</h1>
+        <p class="tagline">Every LLM call the harness logged. Mark any call for evaluation.</p>
+      </header>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Latest calls</h2>
+          <p id="refresh-label" class="muted">Loading...</p>
+        </div>
+        <div id="activity"></div>
+      </section>
+    </main>
+    <script src="/activity.js"></script>
+  </body>
+</html>

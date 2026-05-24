@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIAR — Simulate</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <nav class="page-nav" aria-label="Primary">
+          <span class="nav-pill nav-pill-active">Simulate</span>
+          <a class="nav-pill" href="/activity">Activity</a>
+          <a class="nav-pill" href="/evaluation">Evaluation queue</a>
+          <a class="nav-pill" href="/settings">Settings</a>
+        </nav>
+        <h1>AIAR — Artificial Intelligence and RAG</h1>
+        <p class="tagline">Simulate a prompt through your RAG + grounding harness, see the answer, then mark it for evaluation.</p>
+      </header>
+
+      <section class="panel">
+        <div class="section-heading">
+          <h2>Prompt console</h2>
+          <p>The prompt is retrieved against your corpus, answered by your Qwen model, then judged.</p>
+        </div>
+        <label class="field">
+          <span>Prompt</span>
+          <textarea id="prompt" rows="4" placeholder="Ask something your documents should answer..."></textarea>
+        </label>
+        <div class="controls">
+          <label class="toggle"><input type="checkbox" id="rag" checked /> Use RAG (retrieve context)</label>
+          <label class="toggle"><input type="checkbox" id="reground" /> Reground (apply prior corrections)</label>
+          <label class="toggle"><input type="checkbox" id="think" /> Show reasoning</label>
+          <button id="run">Run prompt</button>
+        </div>
+        <p id="status" class="muted"></p>
+      </section>
+
+      <section class="panel hidden" id="result-panel">
+        <div class="section-heading section-heading-tight">
+          <h2>Result</h2>
+        </div>
+        <div class="block hidden" id="reasoning-block">
+          <h3>Reasoning</h3>
+          <pre id="reasoning"></pre>
+        </div>
+        <div class="block">
+          <h3>Answer</h3>
+          <pre id="answer"></pre>
+        </div>
+        <div class="verdict-row">
+          <span id="verdict-badge" class="badge badge-neutral">verdict</span>
+          <span id="rag-badge" class="badge badge-neutral"></span>
+          <span id="reground-badge" class="badge badge-neutral"></span>
+          <span id="latency" class="muted"></span>
+        </div>
+        <p id="verdict-reason" class="muted"></p>
+        <div class="eval-actions">
+          <button id="mark" class="secondary">Mark for evaluation</button>
+          <span id="mark-message" class="muted"></span>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

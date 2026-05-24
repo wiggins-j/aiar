@@ -1,0 +1,10 @@
+# Optional RAG / retrieval stack for AIAR.
+# Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-rag.txt
+#
+# Without these, the vector store is unavailable and the harness answers from
+# the bare model (no retrieval). With them, you get full hybrid + rerank RAG.
+
+chromadb>=0.5.0                 # persistent vector store
+sentence-transformers>=3.0.0   # bi-encoder embeddings + cross-encoder reranker
+rank-bm25>=0.2.2               # sparse BM25 lexical index for hybrid retrieval

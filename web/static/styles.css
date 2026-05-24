@@ -1,0 +1,139 @@
+:root {
+  --bg: #0e1116;
+  --panel: #171b22;
+  --panel-2: #1e232c;
+  --text: #e6edf3;
+  --muted: #8b97a7;
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #4493f8;
+  --green: #2ea043;
+  --green-soft: rgba(46, 160, 67, 0.16);
+  --amber: #d29922;
+  --amber-soft: rgba(210, 153, 34, 0.16);
+  --red: #f85149;
+  --red-soft: rgba(248, 81, 73, 0.16);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.shell {
+  width: min(1100px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 28px 0 64px;
+}
+
+.hero { margin-bottom: 24px; }
+.hero h1 { margin: 8px 0 0; font-size: 1.7rem; }
+.hero .tagline { color: var(--muted); margin: 4px 0 0; }
+
+.page-nav { display: flex; gap: 8px; margin-bottom: 8px; }
+.nav-pill {
+  text-decoration: none;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+.nav-pill-active { color: var(--text); border-color: var(--accent); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+
+.section-heading { margin-bottom: 12px; }
+.section-heading h2 { margin: 0; font-size: 1.1rem; }
+.section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+.muted { color: var(--muted); font-size: 0.85rem; }
+
+label.field { display: block; margin-bottom: 12px; }
+label.field > span { display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--muted); }
+
+textarea, input[type="text"], select {
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+textarea { resize: vertical; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 12px; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.88rem; }
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.secondary { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+pre {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.block h3 { margin: 0 0 6px; font-size: 0.9rem; color: var(--muted); }
+
+.badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+.badge-good { background: var(--green-soft); color: var(--green); }
+.badge-partial { background: var(--amber-soft); color: var(--amber); }
+.badge-bad { background: var(--red-soft); color: var(--red); }
+.badge-neutral { background: var(--panel-2); color: var(--muted); }
+
+.verdict-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px; flex-wrap: wrap; }
+
+.list-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--panel-2);
+}
+.list-item .top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.list-item .title { font-weight: 600; }
+.list-item .meta { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+
+.timeline-title-link { color: var(--text); text-decoration: none; }
+.timeline-title-link:hover { color: var(--accent); }
+
+.eval-card { margin-bottom: 16px; }
+.eval-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.eval-message { margin-top: 8px; }
+.hidden { display: none !important; }
+.flash-improved { outline: 2px solid var(--green); }

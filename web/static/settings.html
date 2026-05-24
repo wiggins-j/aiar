@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AIAR — Settings</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <nav class="page-nav" aria-label="Primary">
+          <a class="nav-pill" href="/">Simulate</a>
+          <a class="nav-pill" href="/activity">Activity</a>
+          <a class="nav-pill" href="/evaluation">Evaluation queue</a>
+          <span class="nav-pill nav-pill-active">Settings</span>
+        </nav>
+        <h1>Settings</h1>
+        <p class="tagline">Switch the active model and RAG instance, and edit the harness answer system prompt. Changes apply to the next call — no restart.</p>
+        <p id="active-summary" class="muted"></p>
+      </header>
+
+      <section class="panel">
+        <div class="section-heading section-heading-tight">
+          <h2>Model</h2>
+          <p class="muted">The Qwen model every harness/answer call uses. Source: live Ollama <code>/api/tags</code>.</p>
+        </div>
+        <label class="field" style="margin:0">
+          <span>Active model</span>
+          <select id="settings-model-select" class="settings-model-select"></select>
+        </label>
+        <div class="eval-actions">
+          <button id="apply-model">Apply model</button>
+          <span id="model-message" class="muted"></span>
+        </div>
+        <p class="muted" id="model-note">Switch applies to the next LLM call; larger models are slower. A restart reverts to the env default.</p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading section-heading-tight">
+          <h2>RAG instance</h2>
+          <p class="muted">Which named corpus the answerer retrieves from. Pick <strong>No RAG</strong> to answer from the bare model.</p>
+        </div>
+        <label class="field" style="margin:0">
+          <span>Active RAG instance</span>
+          <select id="settings-rag-select" class="settings-rag-select"></select>
+        </label>
+        <div class="eval-actions">
+          <button id="apply-rag">Apply RAG</button>
+          <span id="rag-message" class="muted"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading section-heading-tight">
+          <h2>System prompt</h2>
+          <p class="muted">The system prompt for the harness answer path only. It does <strong>not</strong> affect the judge or any other code-defined prompt.</p>
+        </div>
+        <label class="field" style="margin:0">
+          <span>Harness answer system prompt</span>
+          <textarea id="settings-system-prompt" rows="8" placeholder="Loading..."></textarea>
+        </label>
+        <div class="eval-actions">
+          <button id="save-system">Save</button>
+          <button id="reset-system" class="secondary">Reset to default</button>
+          <span id="system-message" class="muted"></span>
+        </div>
+      </section>
+    </main>
+    <script src="/settings.js"></script>
+  </body>
+</html>
