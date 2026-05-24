@@ -20,11 +20,18 @@ async function loadModels() {
     const resp = await fetch("/api/models", { cache: "no-store" });
     const data = await resp.json();
     const models = data.models || [];
-    if (!data.ollama_reachable || !models.length) {
+    if (!data.ollama_reachable) {
       sel.innerHTML = '<option value="">Ollama unreachable</option>';
       sel.disabled = true;
       $("apply-model").disabled = true;
       msg.textContent = "Ollama is unreachable — model switching is disabled.";
+      return;
+    }
+    if (!models.length) {
+      sel.innerHTML = '<option value="">No matching models installed</option>';
+      sel.disabled = true;
+      $("apply-model").disabled = true;
+      msg.textContent = "Ollama is reachable, but no installed models match the current filter.";
       return;
     }
     sel.disabled = false;

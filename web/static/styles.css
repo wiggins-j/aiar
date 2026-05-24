@@ -32,6 +32,18 @@ body {
 }
 
 .hero { margin-bottom: 24px; }
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hero-logo {
+  width: clamp(72px, 12vw, 112px);
+  height: auto;
+  flex: 0 0 auto;
+  image-rendering: auto;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.35));
+}
 .hero h1 { margin: 8px 0 0; font-size: 1.7rem; }
 .hero .tagline { color: var(--muted); margin: 4px 0 0; }
 
@@ -137,3 +149,13 @@ pre {
 .eval-message { margin-top: 8px; }
 .hidden { display: none !important; }
 .flash-improved { outline: 2px solid var(--green); }
+
+@media (max-width: 640px) {
+  .hero-brand {
+    align-items: flex-start;
+  }
+
+  .hero-logo {
+    width: 72px;
+  }
+}

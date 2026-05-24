@@ -9,7 +9,9 @@ Every shell line below assumes you are in the repo root (wherever you cloned
 AIAR, e.g. `~/aiar`). AIAR is **OS-agnostic** — Linux (incl. Ubuntu LTS
 servers), macOS, and Windows. Shell snippets use Linux/macOS syntax; Windows
 equivalents are called out where they differ (venv activation, `export` →
-`$env:`, reset).
+`$env:`, reset). If your machine does not expose bare `python`, substitute the
+launcher it does provide (`python3` on many macOS/Linux systems, `py` on
+Windows).
 
 ---
 
@@ -304,7 +306,8 @@ curl -s -X POST localhost:8765/eval/prompt \
   -d '{"prompt":"How long is the refund window?"}'
 
 # Same prompt, blind (A/B):  POST /eval/prompt?rag=false
-# Record a correction:       POST /reground {"prompt":"...","score":3,"correction":"..."}
+# Optional per-request corpus: include "instance":"mydocs" in either payload.
+# Record a correction:       POST /reground {"prompt":"...","score":3,"correction":"...","instance":"mydocs"}
 ```
 
 ## Appendix: reset everything

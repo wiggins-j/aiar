@@ -406,6 +406,7 @@ def test_aiar_models_inprocess(monkeypatch):
         ollama_client, "list_models",
         lambda *a, **k: [{"name": "qwen-test:1b", "size_bytes": 1, "family": "qwen"},
                          {"name": "qwen-big:9b", "size_bytes": 2, "family": "qwen"}])
+    monkeypatch.setattr(ollama_client, "healthcheck", lambda: True)
     payload = aggregator.get_models()
     assert payload["active"] == "qwen-test:1b"
     assert payload["default"] == "qwen-test:1b"
@@ -420,9 +421,22 @@ def test_aiar_models_inprocess_unreachable(monkeypatch):
     from aiar.llm import ollama_client
     ollama_client.reset_for_testing()
     monkeypatch.setattr(ollama_client, "list_models", lambda *a, **k: [])
+    monkeypatch.setattr(ollama_client, "healthcheck", lambda: False)
     payload = aggregator.get_models()
     assert payload["models"] == []
     assert payload["ollama_reachable"] is False
+    ollama_client.reset_for_testing()
+
+
+def test_aiar_models_inprocess_reachable_but_empty(monkeypatch):
+    from web import aggregator
+    from aiar.llm import ollama_client
+    ollama_client.reset_for_testing()
+    monkeypatch.setattr(ollama_client, "list_models", lambda *a, **k: [])
+    monkeypatch.setattr(ollama_client, "healthcheck", lambda: True)
+    payload = aggregator.get_models()
+    assert payload["models"] == []
+    assert payload["ollama_reachable"] is True
     ollama_client.reset_for_testing()
 
 

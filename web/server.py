@@ -57,6 +57,9 @@ _STATIC = {
     "/activity.js": ("activity.js", "application/javascript; charset=utf-8"),
     "/evaluation.js": ("evaluation.js", "application/javascript; charset=utf-8"),
     "/settings.js": ("settings.js", "application/javascript; charset=utf-8"),
+    "/aiar-logo.png": ("aiar-logo.png", "image/png"),
+    "/favicon.png": ("aiar-logo.png", "image/png"),
+    "/apple-touch-icon.png": ("aiar-logo.png", "image/png"),
 }
 
 

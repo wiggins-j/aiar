@@ -5,7 +5,8 @@
     POST /eval/prompt?think=true                   -> include visible reasoning
     POST /eval/prompt?reground=true                -> prepend prior corrections
     POST /reground {"prompt": "...", "score": 4,   -> record a correction into
-                    "correction": "...", "reason"}    the grounding store
+                    "correction": "...", "reason",
+                    "instance": "docs"}              the grounding store
     GET  /healthz                                  -> {"ok": ..., "rag_ready": ...}
 
 Run with:  uvicorn aiar.harness.service:app --port 8765
@@ -45,6 +46,7 @@ def _startup() -> None:
 class PromptRequest(BaseModel):
     prompt: str = Field(min_length=1)
     context: Optional[str] = None
+    instance: Optional[str] = None
 
 
 @app.post("/eval/prompt")
@@ -54,6 +56,7 @@ def eval_prompt(req: PromptRequest, rag: bool = True, think: bool = False,
         return answer_prompt(
             req.prompt, rag=rag, judge=True, think=think,
             reground=True if reground else None, context=req.context or "",
+            instance=req.instance,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
@@ -64,6 +67,7 @@ class RegroundRequest(BaseModel):
     score: int = Field(ge=1, le=10)
     correction: str = ""
     reason: str = ""
+    instance: Optional[str] = None
 
 
 def _score_to_rating(score: int) -> str:
@@ -81,7 +85,8 @@ def reground(req: RegroundRequest) -> dict:
     verdict = Verdict(rating=_score_to_rating(req.score),
                       reason=req.reason or req.correction,
                       failure_tags=[], confidence="high")
-    rec = grounding_store.record(req.prompt, verdict, correction=req.correction)
+    rec = grounding_store.record(
+        req.prompt, verdict, correction=req.correction, instance=req.instance)
     return {"ok": True, "recorded": rec.to_dict()}
 
 

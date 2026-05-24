@@ -179,7 +179,7 @@ def answer_prompt(
     options = ANSWER_THINK_OPTIONS if think else ANSWER_OPTIONS
     timeout = ANSWER_THINK_TIMEOUT_S if think else ANSWER_TIMEOUT_S
 
-    token = observer.set_context(endpoint="/eval/prompt")
+    token = observer.set_context(endpoint="/eval/prompt", raw_prompt=prompt)
     capture: Dict[str, Any] = {}
     try:
         raw_answer, latency_ms = call_ollama(
@@ -193,15 +193,9 @@ def answer_prompt(
     finally:
         observer.clear_context(token)
 
-    # Recover the call_id the observer just wrote for this answer call, so the
-    # GUI can mark exactly this call for evaluation.
-    call_id = None
-    try:
-        recent = observer.read_recent(1)
-        if recent:
-            call_id = recent[-1].get("call_id")
-    except Exception:
-        call_id = None
+    # The Ollama client captures the emitted call_id directly, so concurrent
+    # requests never have to race against the tail of the observer log.
+    call_id = capture.get("call_id")
 
     if think:
         reasoning, answer = _split_reasoning_answer(raw_answer)

@@ -65,6 +65,15 @@ def _summary(prompt: str, limit: int = 80) -> str:
     return (s[:limit] + "…") if len(s) > limit else (s or "(empty prompt)")
 
 
+def _logged_prompt(event: Dict[str, Any]) -> str:
+    """Prefer the original user-entered prompt when the observer captured it.
+
+    Older log records only have the expanded harness prompt, so fall back to the
+    raw LLM prompt payload for backward compatibility.
+    """
+    return str(event.get("raw_prompt") or event.get("user_prompt") or "")
+
+
 # --------------------------------------------------------------------------
 # Simulate (run a prompt through the harness)
 # --------------------------------------------------------------------------
@@ -103,7 +112,7 @@ def get_models() -> Dict[str, Any]:
     from aiar.llm import ollama_client
     models = ollama_client.list_models()
     active = ollama_client.active_model()
-    reachable = bool(models)
+    reachable = ollama_client.healthcheck()
     return {
         "active": active,
         "default": ollama_client.default_model(),
@@ -206,7 +215,7 @@ def recent_activity(config: Config, limit: int = 25) -> Dict[str, Any]:
             "timestamp": ev.get("timestamp"),
             "endpoint": ev.get("endpoint"),
             "model": ev.get("model"),
-            "summary": _summary(ev.get("user_prompt") or ""),
+            "summary": _summary(_logged_prompt(ev)),
             "latency_ms": ev.get("latency_ms"),
             "status": _status(cid, queued, verdicts),
         })
@@ -225,7 +234,8 @@ def activity_detail(config: Config, call_id: str) -> Dict[str, Any]:
         "timestamp": ev.get("timestamp"),
         "endpoint": ev.get("endpoint"),
         "model": ev.get("model"),
-        "prompt": ev.get("user_prompt"),
+        "prompt": _logged_prompt(ev),
+        "llm_prompt": ev.get("user_prompt"),
         "response": ev.get("response_text"),
         "thinking": ev.get("thinking"),
         "error": ev.get("error"),
@@ -278,7 +288,8 @@ def enqueue(config: Config, call_id: str) -> Dict[str, Any]:
             "queued_at": iso_now(),
             "endpoint": ev.get("endpoint"),
             "model": ev.get("model"),
-            "prompt": ev.get("user_prompt"),
+            "prompt": _logged_prompt(ev),
+            "llm_prompt": ev.get("user_prompt"),
             "response": ev.get("response_text"),
         })
     return {"ok": True, "status": 200, "data": {"call_id": call_id, "status": "pending"}}
@@ -328,7 +339,7 @@ def submit_verdict(config: Config, call_id: str, score: int,
     if score <= config.reason_threshold and not correction:
         return {"ok": False, "status": 422, "error": "correction_required"}
 
-    prompt = ev.get("user_prompt") or ""
+    prompt = _logged_prompt(ev)
     rating = _score_to_rating(score)
     verdict = Verdict(rating=rating, reason=correction, failure_tags=[], confidence="high")
 
@@ -340,6 +351,7 @@ def submit_verdict(config: Config, call_id: str, score: int,
         "rating": rating,
         "correction": correction,
         "prompt": prompt,
+        "llm_prompt": ev.get("user_prompt"),
         "response": ev.get("response_text"),
     })
     # 2. Reground: feed the correction back into the grounding store.

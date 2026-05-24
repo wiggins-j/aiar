@@ -237,7 +237,7 @@ def call_ollama(
                 "class": type(raised).__name__,
                 "message": str(raised),
             }
-        observer.emit_call(
+        call_id = observer.emit_call(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -251,6 +251,8 @@ def call_ollama(
             latency_ms=latency_ms,
             error=result["error"],
         )
+        if capture is not None:
+            capture["call_id"] = call_id
 
 
 def healthcheck() -> bool:

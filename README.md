@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="web/static/aiar-logo.png" alt="AIAR logo" width="280" />
+</p>
+
 ## ⚡ Quick start: hand this to your AI
 
 New here? Don't read the docs — **copy the block below and paste it into any
@@ -260,6 +264,10 @@ the answer better*, and *closing the loop* when they didn't.
 | `web/` | the stdlib-only watcher GUI: Simulate / Activity / Evaluation / Settings pages |
 
 ## Quickstart
+
+Use the Python launcher that exists on your machine: on many macOS/Linux setups
+that means `python3`; on Windows it is often `py`. The examples below use
+`python` generically.
 
 ```bash
 # 1. Pull any Qwen model with Ollama. Pick a tag sized to your hardware; verify

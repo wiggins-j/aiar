@@ -123,10 +123,12 @@ def _persist(payload: dict) -> None:
         f.write(line + "\n")
 
 
-def set_context(endpoint: str, request_id: Optional[str] = None) -> Token:
+def set_context(endpoint: str, request_id: Optional[str] = None, **extra: Any) -> Token:
     """Set per-call observation context. The token MUST be passed to
     :func:`clear_context` in a ``try/finally`` by the caller."""
-    return LLM_CALL_CONTEXT.set({"endpoint": endpoint, "request_id": request_id})
+    ctx = {"endpoint": endpoint, "request_id": request_id}
+    ctx.update(extra)
+    return LLM_CALL_CONTEXT.set(ctx)
 
 
 def clear_context(token: Token) -> None:
@@ -166,16 +168,21 @@ def emit_call(
     completion_tokens: Optional[int],
     latency_ms: int,
     error: Optional[dict],
-) -> None:
-    """Append one JSONL event describing this Ollama call. Best-effort."""
+) -> Optional[str]:
+    """Append one JSONL event describing this Ollama call. Best-effort.
+
+    Returns the emitted ``call_id`` when persistence succeeds, else ``None``.
+    """
     try:
         ctx = LLM_CALL_CONTEXT.get() or {}
+        call_id = str(uuid.uuid4())
         event = {
             "schema_version": SCHEMA_VERSION,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "call_id": str(uuid.uuid4()),
+            "call_id": call_id,
             "endpoint": ctx.get("endpoint") or "unknown",
             "request_id": ctx.get("request_id"),
+            "raw_prompt": ctx.get("raw_prompt"),
             "model": model,
             "system_prompt": system_prompt,
             "user_prompt": user_prompt,
@@ -190,8 +197,10 @@ def emit_call(
             "error": error,
         }
         _persist(event)
+        return call_id
     except Exception as exc:
         _log.warning("observer.emit_call failed: %s", exc)
+        return None
 
 
 def read_recent(limit: int = 100) -> "list[dict[str, Any]]":
