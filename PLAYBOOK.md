@@ -18,7 +18,8 @@ Windows).
 ## 0. Prerequisites
 
 - **Any OS** — Linux (incl. headless Ubuntu LTS servers), macOS, or Windows.
-- Python 3.9–3.12 (on 3.13 the ChromaDB native dep may lack a wheel)
+- Python 3.10–3.14. On newer active versions, the RAG stack may need to build
+  `chroma-hnswlib` from source on some platforms if a wheel is unavailable.
 - Disk/RAM/VRAM sized to the Qwen model you pick (see the table in §1). A
   mid-size 7–8B model needs ~5 GB disk and ~8 GB RAM (or ~6 GB VRAM).
 - **Headless server note:** the CLI/A-B runner need no GUI. For the watcher GUI

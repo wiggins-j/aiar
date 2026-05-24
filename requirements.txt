@@ -7,6 +7,7 @@ requests>=2.28
 # (queries return empty and the harness answers from the bare model), so you
 # can run the harness without them — but you need them for real retrieval.
 #
-# NOTE: on Python 3.13 chroma-hnswlib may lack a prebuilt wheel; use 3.10-3.12
-# or install a build toolchain. Install with:
+# NOTE: on newer active Python releases, chroma-hnswlib may not have a prebuilt
+# wheel for every platform/Python combination, so pip may need to build it from
+# source. Install with:
 #   pip install -r requirements.txt -r requirements-rag.txt

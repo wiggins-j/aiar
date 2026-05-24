@@ -1,7 +1,7 @@
 """Evaluation schemas.
 
 Kept dependency-free (plain dataclasses, no pydantic) so the AIAR core runs on
-a stock Python 3.9+ without extra installs. The single shape that matters is
+a stock Python 3.10+ without extra installs. The single shape that matters is
 :class:`Verdict` — an LLM-as-judge quality judgment of one (prompt, response)
 pair.
 """

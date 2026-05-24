@@ -120,8 +120,10 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
   reset). On a HEADLESS Ubuntu server there's no browser for the GUI — either
   SSH-forward the GUI port (`ssh -L 8088:127.0.0.1:8088 me@server`) or set
   `AIAR_WEB_HOST=0.0.0.0` behind a firewall/tunnel; the CLI needs no GUI.
-- Python is 3.9–3.12 (NOT 3.13 — the ChromaDB native dep may lack a wheel
-  there). Run `python3 --version` (Windows: `py --version`) and confirm.
+- Python is 3.10–3.14. On newer active versions, the RAG stack may need to
+  build `chroma-hnswlib` from source on some platforms if a wheel is
+  unavailable there. Run `python3 --version` (Windows: `py --version`) and
+  confirm.
 - `ollama` is installed and the server is reachable. If `ollama` is missing,
   tell me how to install it for my OS and have me confirm:
     • macOS:   `brew install ollama` or the .dmg from https://ollama.com/download
@@ -376,7 +378,7 @@ vector retrieval — turn them on to trade a little latency for relevance.
 
 - **OS-agnostic** — Linux (incl. Ubuntu LTS servers), macOS, and Windows. Pure
   Python + `pathlib`; no shell scripts or platform-specific code.
-- Python 3.9–3.12
+- Python 3.10–3.14
 - [Ollama](https://ollama.com) running locally with any Qwen model pulled. Pick a
   model sized to your hardware — tags at <https://ollama.com/library/qwen>, specs
   at <https://huggingface.co/Qwen>, with newer family collections at
