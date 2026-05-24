@@ -53,6 +53,8 @@ exact names) — AIAR is entirely environment-driven.
    ⚠️ ALWAYS check the canonical sources for up-to-date models + exact specs — the
    table above is a SNAPSHOT and will age:
      • Qwen model cards & specs:  https://huggingface.co/Qwen
+     • Qwen 3.5 collection:       https://huggingface.co/collections/Qwen/qwen35
+     • Qwen 3.6 collection:       https://huggingface.co/collections/Qwen/qwen36
      • Ollama-pullable tags:      https://ollama.com/library/qwen
    The exact tag must exist for YOUR Ollama version — if any tag referenced in this
    repo isn't pullable, substitute the nearest real one from those URLs.
@@ -271,7 +273,10 @@ that means `python3`; on Windows it is often `py`. The examples below use
 
 ```bash
 # 1. Pull any Qwen model with Ollama. Pick a tag sized to your hardware; verify
-#    it's pullable at https://ollama.com/library/qwen (specs: https://huggingface.co/Qwen)
+#    it's pullable at https://ollama.com/library/qwen
+#    (specs / collections: https://huggingface.co/Qwen ,
+#     https://huggingface.co/collections/Qwen/qwen35 ,
+#     https://huggingface.co/collections/Qwen/qwen36)
 ollama pull qwen2.5:7b          # or qwen2.5:3b (laptops), qwen3:14b (stronger), ...
 
 # 2. Install AIAR + the RAG stack
@@ -352,7 +357,10 @@ vector retrieval — turn them on to trade a little latency for relevance.
 - Python 3.9–3.12
 - [Ollama](https://ollama.com) running locally with any Qwen model pulled. Pick a
   model sized to your hardware — tags at <https://ollama.com/library/qwen>, specs
-  at <https://huggingface.co/Qwen> (always check these for the latest models).
+  at <https://huggingface.co/Qwen>, with newer family collections at
+  <https://huggingface.co/collections/Qwen/qwen35> and
+  <https://huggingface.co/collections/Qwen/qwen36> (always check these for the
+  latest models).
 - `requirements.txt` (core) + `requirements-rag.txt` (vector store + reranker).
   The RAG stack is optional: without it the store is unavailable and the harness
   answers from the bare model.

@@ -64,6 +64,8 @@ guidance — CPU-only works at every size, just slower):
 > ⚠️ **Always check the canonical sources** — this table is a snapshot and will
 > age, and the exact tag must exist for your Ollama version:
 > - Qwen model cards & specs: <https://huggingface.co/Qwen>
+> - Qwen 3.5 collection: <https://huggingface.co/collections/Qwen/qwen35>
+> - Qwen 3.6 collection: <https://huggingface.co/collections/Qwen/qwen36>
 > - Ollama-pullable tags: <https://ollama.com/library/qwen>
 >
 > Not sure of your specs? Detect them: Linux `free -h` + `nvidia-smi`; macOS

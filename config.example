@@ -3,7 +3,10 @@
 
 # ---- Model (model-agnostic — point at ANY Qwen you have pulled) -------------
 # Pick a tag sized to your hardware. Verify it's pullable at
-# https://ollama.com/library/qwen ; model specs at https://huggingface.co/Qwen
+# https://ollama.com/library/qwen ; model specs / collections at
+# https://huggingface.co/Qwen
+# https://huggingface.co/collections/Qwen/qwen35
+# https://huggingface.co/collections/Qwen/qwen36
 # (always check these for the latest models — tags age).
 export OLLAMA_MODEL="qwen2.5:7b"            # e.g. qwen2.5:3b (laptops), qwen3:14b (stronger), ...
 export OLLAMA_URL="http://localhost:11434/api/generate"
