@@ -24,6 +24,28 @@ confirm it actually succeeded (show the relevant output) before moving on. Be
 defensive: never assume — check prerequisites first and stop with a clear
 explanation if something is missing.
 
+=== STEP -1: Verify or bootstrap the repo BEFORE asking Step 0 questions ===
+First confirm you are in a real AIAR checkout, not just an empty directory or a
+bare/partial Git repo. Check the working directory and verify that BOTH
+`PLAYBOOK.md` and `config.example` are present there before doing anything else.
+
+If they are missing:
+- Show me the exact path you checked and the directory listing.
+- Check whether this is just the wrong local path by looking for another nearby
+  populated AIAR checkout.
+- If you find a populated checkout, tell me the exact correct path and switch to it.
+- If the directory only contains `.git`, has no commits, or is otherwise not
+  populated, treat it as a broken/incomplete repo bootstrap and FIX IT YOURSELF:
+  clone the canonical AIAR repo into that path, using HTTPS by default:
+  `https://github.com/wiggins-j/aiar.git`
+- If the target directory is unusable for cloning because it already contains an
+  empty `.git` directory, remove that broken directory and re-clone cleanly into
+  the same path.
+- Do NOT stop and ask me for the repo URL unless cloning the canonical repo
+  actually fails.
+- Only after the repo contents are present and BOTH `PLAYBOOK.md` and
+  `config.example` exist should you continue to Step 0.
+
 === STEP 0: Ask me these configuration questions FIRST ===
 Ask me all of these up front. For each, tell me the recommended default and let
 me just say "defaults" to accept them all. Then use my answers (or the defaults)

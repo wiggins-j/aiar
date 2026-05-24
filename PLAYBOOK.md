@@ -77,7 +77,8 @@ guidance — CPU-only works at every size, just slower):
 ## 2. Install AIAR
 
 ```bash
-git clone <your-fork-url> aiar && cd aiar    # or use this repo directly
+git clone https://github.com/wiggins-j/aiar.git aiar && cd aiar
+# or clone your own fork instead, or use an existing local checkout directly
 
 python -m venv .venv
 source .venv/bin/activate              # Windows (PowerShell): .venv\Scripts\Activate.ps1
