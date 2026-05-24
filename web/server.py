@@ -11,6 +11,7 @@ JSON API:
     GET  /api/activity/detail?call_id=...
     POST /api/activity/evaluate  {call_id}                  (enqueue)
     GET  /api/evaluation/queue
+    POST /api/evaluation/clear
     POST /api/evaluation/verdict {call_id, score, correction}  (score + reground)
     GET  /healthz
 
@@ -28,6 +29,7 @@ from urllib import parse
 
 from .aggregator import (
     activity_detail,
+    clear_evaluation_queue,
     enqueue,
     evaluation_queue,
     get_models,
@@ -43,6 +45,7 @@ from .aggregator import (
 )
 from .config import Config
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _STATIC = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -74,6 +77,12 @@ class WatcherHandler(BaseHTTPRequestHandler):
         if path in _STATIC:
             name, mime = _STATIC[path]
             self._serve_file(self.config.static_dir / name, mime)
+            return
+        if path == "/LICENSE":
+            self._serve_file(_PROJECT_ROOT / "LICENSE", "text/plain; charset=utf-8")
+            return
+        if path == "/NOTICE":
+            self._serve_file(_PROJECT_ROOT / "NOTICE", "text/plain; charset=utf-8")
             return
         if path == "/api/activity":
             self._serve_json(HTTPStatus.OK, recent_activity(self.config))
@@ -156,6 +165,11 @@ class WatcherHandler(BaseHTTPRequestHandler):
                 self._serve_json(HTTPStatus.BAD_REQUEST, {"error": "invalid_score"})
                 return
             result = submit_verdict(self.config, call_id, score, correction)
+            self._respond_result(result)
+            return
+
+        if parsed.path == "/api/evaluation/clear":
+            result = clear_evaluation_queue(self.config)
             self._respond_result(result)
             return
 

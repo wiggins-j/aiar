@@ -27,12 +27,22 @@
       </header>
 
       <section class="panel">
-        <div class="section-heading">
-          <h2>Pending reviews</h2>
-          <p id="queue-label" class="muted">Loading...</p>
+        <div class="section-heading section-heading-row">
+          <div>
+            <h2>Pending reviews</h2>
+            <p id="queue-label" class="muted">Loading...</p>
+          </div>
+          <div class="toolbar-row">
+            <button id="clear-queue" class="secondary">Clear queue</button>
+            <span id="clear-queue-message" class="muted"></span>
+          </div>
         </div>
         <div id="queue"></div>
       </section>
+
+      <footer class="site-footer">
+        <p>Licensed under the Apache License 2.0. See <a href="/LICENSE">LICENSE</a> and <a href="/NOTICE">NOTICE</a>.</p>
+      </footer>
     </main>
     <script src="/evaluation.js"></script>
   </body>

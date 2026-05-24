@@ -85,3 +85,81 @@ def test_queue_and_reground_use_raw_prompt(tmp_path, monkeypatch):
     assert grounding_store.lookup(llm_prompt, base=base_dir) == []
 
     grounding_store.reset_default_store_for_testing()
+
+
+def test_clear_evaluation_queue(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("AIAR_LOG_DIR", str(log_dir))
+
+    raw_prompt = "hello there"
+    token = observer.set_context(endpoint="/eval/prompt", raw_prompt=raw_prompt)
+    try:
+        call_id = observer.emit_call(
+            model="qwen-test:1b",
+            system_prompt="system",
+            user_prompt="QUESTION:\nhello there",
+            options={},
+            format=None,
+            think=False,
+            response_text="Hello!",
+            thinking=None,
+            prompt_tokens=4,
+            completion_tokens=2,
+            latency_ms=8,
+            error=None,
+        )
+    finally:
+        observer.clear_context(token)
+
+    config = _config(tmp_path)
+    assert aggregator.enqueue(config, call_id)["ok"] is True
+    assert aggregator.evaluation_queue(config)["count"] == 1
+
+    cleared = aggregator.clear_evaluation_queue(config)
+    assert cleared["ok"] is True
+    assert cleared["data"]["cleared"] == 1
+    assert aggregator.evaluation_queue(config)["count"] == 0
+
+
+def test_recent_activity_and_detail_expose_previews_and_rag_state(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    monkeypatch.setenv("AIAR_LOG_DIR", str(log_dir))
+
+    raw_prompt = "Is live chat support available on weekends?"
+    user_prompt = (
+        "--- Knowledge (top-1) ---\n"
+        "[chunk 1]\nLive chat is weekdays only.\n"
+        "--- End Knowledge ---\n\n"
+        f"QUESTION:\n{raw_prompt}"
+    )
+    token = observer.set_context(endpoint="/eval/prompt", raw_prompt=raw_prompt)
+    try:
+        call_id = observer.emit_call(
+            model="qwen-test:1b",
+            system_prompt="system",
+            user_prompt=user_prompt,
+            options={},
+            format=None,
+            think=False,
+            response_text="No, live chat support is not available on weekends.",
+            thinking=None,
+            prompt_tokens=12,
+            completion_tokens=8,
+            latency_ms=15,
+            error=None,
+        )
+    finally:
+        observer.clear_context(token)
+
+    config = _config(tmp_path)
+    recent = aggregator.recent_activity(config, limit=5)
+    item = recent["items"][0]
+    assert item["prompt_preview"].startswith("Is live chat support available")
+    assert item["response_preview"].startswith("No, live chat support is not available")
+    assert item["rag_state"] == "RAG ON"
+
+    detail = aggregator.activity_detail(config, call_id)
+    assert detail["found"] is True
+    assert detail["prompt"] == raw_prompt
+    assert detail["response"] == "No, live chat support is not available on weekends."
+    assert detail["rag_state"] == "RAG ON"

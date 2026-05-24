@@ -23,6 +23,11 @@ repo — follow it. Work step by step, run the real commands, and after EACH ste
 confirm it actually succeeded (show the relevant output) before moving on. Be
 defensive: never assume — check prerequisites first and stop with a clear
 explanation if something is missing.
+For every step, show:
+- the exact command(s) you ran
+- the key success output lines
+- a short pass/fail statement before moving to the next step
+Do not silently batch multiple steps into one end summary.
 
 === STEP -1: Verify or bootstrap the repo BEFORE asking Step 0 questions ===
 First confirm you are in a real AIAR checkout, not just an empty directory or a
@@ -81,31 +86,41 @@ exact names) — AIAR is entirely environment-driven.
    The exact tag must exist for YOUR Ollama version — if any tag referenced in this
    repo isn't pullable, substitute the nearest real one from those URLs.
    → sets OLLAMA_MODEL
-2. Where is my document corpus (a folder of .txt/.md/.markdown/.rst/.json)? —
-   (recommended: start with the bundled `./examples/docs` to prove the loop
-   works, then re-run ingest pointed at my real folder.)
-3. RAG corpus / collection name? — (recommended: `aiar`.) → sets AIAR_CORPUS
-4. Embedding model? — (recommended: `all-MiniLM-L6-v2`, the default.)
+2. Where should the AIAR checkout live, and should this setup be ISOLATED from
+   any existing AIAR/RAG state on that machine? — (recommended: if this is a
+   shared server, or if I tell you not to disturb an existing setup, create a
+   fresh checkout path such as `~/aiar-isolated` and use isolated runtime paths
+   such as `AIAR_BASE_DIR`, `AIAR_DB_PATH`, `GROUNDING_BASE_DIR`,
+   `AIAR_LOG_DIR`, `AIAR_QUEUE_FILE`, and `AIAR_VERDICTS_FILE` under a dedicated
+   prefix. On a personal/local box with no existing setup to protect, the normal
+   repo path + default `~/.aiar` state is fine.)
+3. Where is my document corpus (a folder of .txt/.md/.markdown/.rst/.json)? —
+   (recommended: pick ONE of these paths up front and use it consistently:
+   bundled `./examples/docs` for the small Acme **Example RAG** demo; a full
+   Tesla corpus under `corpus/tesla/`; or your own corpus under
+   `corpus/<name>/` / another folder you specify.)
+4. RAG corpus / collection name? — (recommended: `aiar`.) → sets AIAR_CORPUS
+5. Embedding model? — (recommended: `all-MiniLM-L6-v2`, the default.)
    → sets AIAR_EMBEDDING_MODEL
-5. How many chunks to inject into each prompt (top-k)? — (recommended: `3`.)
+6. How many chunks to inject into each prompt (top-k)? — (recommended: `3`.)
    → sets RAG_TOP_K
-6. Enable HYBRID retrieval (dense vectors + BM25)? — (recommended: ON, great for
+7. Enable HYBRID retrieval (dense vectors + BM25)? — (recommended: ON, great for
    exact terms.) → sets RAG_HYBRID_ENABLED=1
-7. Enable cross-encoder RERANKER? — (recommended: ON for relevance; first use
+8. Enable cross-encoder RERANKER? — (recommended: ON for relevance; first use
    downloads `cross-encoder/ms-marco-MiniLM-L-6-v2` and a wide first pass of
    RAG_FETCH_K=20.) → sets RAG_RERANK_ENABLED=1, RAG_FETCH_K=20
-8. Query rewrite / HYDE mode (off | rewrite | hyde)? — (recommended: `hyde`,
+9. Query rewrite / HYDE mode (off | rewrite | hyde)? — (recommended: `hyde`,
    closes the vocabulary gap.) → sets RAG_QUERY_REWRITE_MODE
-9. Enable GROUNDING reinjection (auto-apply my past corrections to every
+10. Enable GROUNDING reinjection (auto-apply my past corrections to every
    answer)? — (recommended: ON so corrections stick.)
    → sets GROUNDING_REINJECTION_ENABLED=1
-   (Note: the project ships ALL of flags 6–9 defaulting OFF so the bare path is
+   (Note: the project ships ALL of flags 7–10 defaulting OFF so the bare path is
    plain vector search; we turn them on here for quality. That's expected.)
-10. GUI host and port? — (recommended: host `127.0.0.1`, port `8088`, the
+11. GUI host and port? — (recommended: host `127.0.0.1`, port `8088`, the
     config.example defaults.) → sets AIAR_WEB_HOST, AIAR_WEB_PORT
-11. Correction-required score threshold (a score at/below this needs a written
+12. Correction-required score threshold (a score at/below this needs a written
     correction)? — (recommended: `7`.) → sets AIAR_REASON_THRESHOLD
-12. Do I also want the optional HTTP harness service (FastAPI)? — (recommended:
+13. Do I also want the optional HTTP harness service (FastAPI)? — (recommended:
     NO for now; the CLI + GUI need none of it. If yes, also
     `pip install -r requirements-service.txt` and run
     `uvicorn aiar.harness.service:app --port 8765`.)
@@ -124,6 +139,12 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
   build `chroma-hnswlib` from source on some platforms if a wheel is
   unavailable there. Run `python3 --version` (Windows: `py --version`) and
   confirm.
+- If I chose `scan remote <user@host>` in Step 0, verify SSH reachability early
+  before assuming the remote setup can continue. If SSH is unreachable, stop and
+  ask me for a reachable target or a network fix before doing anything invasive.
+  If the remote host is reachable by ME but not by YOU from your environment,
+  fall back to having ME run the exact probe commands on that host and paste the
+  output back to you so you can still size the model and continue safely.
 - `ollama` is installed and the server is reachable. If `ollama` is missing,
   tell me how to install it for my OS and have me confirm:
     • macOS:   `brew install ollama` or the .dmg from https://ollama.com/download
@@ -140,7 +161,11 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
 
 === STEP 3: Install AIAR ===
 From the repo root: create and activate a venv, then install core + RAG stack:
-  python -m venv .venv
+  Use the Python launcher that actually exists on that machine:
+  - Linux/macOS: usually `python3`
+  - Windows: usually `py`
+  - use bare `python` only if it is present and points at the intended version
+  <python-launcher> -m venv .venv
   # activate — Linux/macOS:  source .venv/bin/activate
   #            Windows (PowerShell):  .venv\Scripts\Activate.ps1
   #            Windows (cmd):         .venv\Scripts\activate.bat
@@ -148,21 +173,28 @@ From the repo root: create and activate a venv, then install core + RAG stack:
 (`requirements.txt` is the core; `requirements-rag.txt` adds the vector store,
 embeddings, BM25, and reranker — install both.) Then export OLLAMA_MODEL and the
 other config vars from STEP 0 (you can `source config.example` and edit, or set
-them directly). Confirm `python -c "import aiar"` works.
+them directly). Confirm `<python-launcher> -c "import aiar"` works.
 
 === STEP 4: Ingest my documents into the RAG ===
 AIAR ingests a folder of documents. Two ways to fill that folder:
   (a) MANUAL — I already have a folder of .txt/.md/.json files.
   (b) AI-DRIVEN — an AI builds the corpus from a "Collection Brief" (see the
       README section "Building your RAG corpus: two ways" +
-      examples/corpus-briefs/). If I want this, offer to either copy the Tesla
-      example brief or run the builder prompt to interview me, save my brief to
-      briefs/<name>-collection-brief.md, collect docs into corpus/<name>/, then
-      ingest that folder.
+      examples/corpus-briefs/). If I want this, make me choose explicitly:
+      - Tesla full demo: use
+        `examples/corpus-briefs/tesla-manual-expert-collection-brief.md`,
+        collect the docs into `corpus/tesla/`, then ingest with
+        `--instance tesla`.
+      - My own domain: use
+        `examples/corpus-briefs/collection-brief-builder-prompt.md` to
+        interview me, write `briefs/<name>-collection-brief.md`, collect docs
+        into `corpus/<name>/`, then ingest with `--instance <name>`.
 Preview first (no writes): `python -m aiar.rag.ingest <docs folder> --dry-run`
 Then ingest for real: `python -m aiar.rag.ingest <docs folder> --instance <name>`
-(Omit --instance to use the active/`default` instance; `--category <name>` adds a
-metadata tag.) Embeddings persist to `~/.aiar/knowledge`. Confirm chunks written.
+(Omit `--instance` to use the active `default` instance, which the GUI labels
+as **Example RAG**; CLI/API still use the slug `default`. `--category <name>`
+adds a metadata tag.) Embeddings persist to `~/.aiar/knowledge`. Confirm chunks
+written.
 
 === STEP 5: Run the harness ===
 `python -m aiar.harness "How many days do I have to request a refund?"`
@@ -184,8 +216,29 @@ then re-run the harness so the reranker model loads and the difference is felt.
 four pages: Simulate (run a prompt, see answer + verdict, mark it), Activity
 (every logged LLM call, mark any one), Evaluation queue (score 1–10 + correct),
 and Settings (switch the active Qwen model, switch the active RAG instance —
-including a first-class "No RAG" option — and edit the harness system prompt).
+including a first-class "No RAG" option, with the bundled Acme demo shown as
+**Example RAG** instead of raw `default` — and edit the harness system prompt).
 Tell me it's serving and what each page does.
+
+If I'm on a headless Ubuntu LTS box or just don't want a browser, I still want
+the non-GUI path covered. The core loop is already CLI-first (`aiar.rag.ingest`,
+`aiar.harness`, `aiar.eval.runner`). For watcher-only actions that the CLI does
+not expose directly yet (Activity, queue maintenance, live Settings changes),
+run `python -m web.server` and use its local JSON API instead:
+- `POST /api/simulate`
+- `GET /api/activity`
+- `GET /api/activity/detail?call_id=...`
+- `POST /api/activity/evaluate`
+- `GET /api/evaluation/queue`
+- `POST /api/evaluation/verdict`
+- `POST /api/evaluation/clear`
+- `GET /api/models` and `POST /api/models/active`
+- `GET /api/rag/instances` and `POST /api/rag/active`
+- `GET /api/system-prompt` and `POST /api/system-prompt`
+Be explicit that there is no separate first-class CLI for Activity / queue /
+Settings today; use the GUI or the watcher JSON API.
+If no browser is available, do NOT stop at Step 7 — use these watcher API
+endpoints plus the CLI to complete Step 8 and prove the full loop.
 
 === STEP 8: Verify the full end-to-end loop ===
 Walk me through it so I SEE it work:
@@ -209,6 +262,14 @@ When everything passes, give me a short summary of how to use AIAR day to day:
 the ingest command for new docs, how to run the harness/A/B runner, how to open
 the GUI, how the reground loop works, which env vars control behavior (point me
 at config.example), and that `rm -rf ~/.aiar` resets all state.
+At the very end, always give me the exact URL to open for the watcher GUI
+(`http://127.0.0.1:<port>` or the tunneled/remote URL you set up) and the exact
+commands I would rerun next for:
+- ingest
+- harness
+- A/B eval
+- watcher GUI
+- headless watcher API / `curl` path if no browser is available
 ````
 
 ---
@@ -324,6 +385,12 @@ See **[PLAYBOOK.md](PLAYBOOK.md)** for the complete, copy-paste, end-to-end
 walkthrough — including turning on the reranker + grounding flags and verifying
 a regrounded answer improved.
 
+If you do not want a browser, the core workflow is already available from the
+CLI (`aiar.rag.ingest`, `aiar.harness`, `aiar.eval.runner`). The watcher-only
+features (Activity, queue maintenance, live Settings changes) are available via
+the watcher server's local JSON API after `python -m web.server`; there is not
+yet a separate first-class CLI for those surfaces.
+
 ## Building your RAG corpus: two ways
 
 AIAR ingests a *folder of documents*. How that folder gets populated is up to you —
@@ -336,7 +403,8 @@ there are two supported paths:
 python -m aiar.rag.ingest /path/to/my/docs --instance my-corpus
 ```
 
-(Omit `--instance` to ingest into the active instance, which defaults to
+(Omit `--instance` to ingest into the active built-in instance. In the GUI that
+instance is shown as **Example RAG**; in CLI/API flags its slug is still
 `default`. A new named instance is created on first ingest.)
 
 **2. AI-driven — an AI builds the corpus from a brief.** Write a one-file
@@ -344,6 +412,18 @@ python -m aiar.rag.ingest /path/to/my/docs --instance my-corpus
 which sources to use, what's in/out of scope, how to split + tag files, and the
 safety rules to respect. Hand the brief to the agent; it fetches and normalizes
 documents into a folder; then you ingest that folder with AIAR as above.
+
+Choose one of these paths:
+
+- **Full Tesla demo:** start from
+  [`examples/corpus-briefs/tesla-manual-expert-collection-brief.md`](examples/corpus-briefs/tesla-manual-expert-collection-brief.md),
+  have the agent collect docs into `corpus/tesla/`, then ingest with
+  `python -m aiar.rag.ingest corpus/tesla --instance tesla`.
+- **Your own domain/template:** start from
+  [`examples/corpus-briefs/collection-brief-builder-prompt.md`](examples/corpus-briefs/collection-brief-builder-prompt.md),
+  let the AI interview you and write `briefs/<name>-collection-brief.md`,
+  collect docs into `corpus/<name>/`, then ingest with
+  `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
 
 - **Worked example:** [`examples/corpus-briefs/tesla-manual-expert-collection-brief.md`](examples/corpus-briefs/tesla-manual-expert-collection-brief.md)
   — a safety-first brief for a Tesla owner-manual assistant (official Tesla + NHTSA

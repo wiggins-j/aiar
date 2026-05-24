@@ -71,6 +71,18 @@ body {
 .section-heading { margin-bottom: 12px; }
 .section-heading h2 { margin: 0; font-size: 1.1rem; }
 .section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+.section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 
 .muted { color: var(--muted); font-size: 0.85rem; }
 
@@ -140,6 +152,17 @@ pre {
 .list-item .top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .list-item .title { font-weight: 600; }
 .list-item .meta { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+.activity-preview {
+  display: grid;
+  gap: 4px;
+  line-height: 1.4;
+}
+.activity-preview strong {
+  color: var(--text);
+}
+.activity-detail {
+  margin-top: 12px;
+}
 
 .timeline-title-link { color: var(--text); text-decoration: none; }
 .timeline-title-link:hover { color: var(--accent); }
@@ -147,6 +170,21 @@ pre {
 .eval-card { margin-bottom: 16px; }
 .eval-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
 .eval-message { margin-top: 8px; }
+.site-footer {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+  margin-top: 28px;
+}
+.site-footer p {
+  margin: 0;
+}
+.site-footer a {
+  color: var(--text);
+}
+.site-footer a:hover {
+  color: var(--accent);
+}
 .hidden { display: none !important; }
 .flash-improved { outline: 2px solid var(--green); }
 
@@ -157,5 +195,9 @@ pre {
 
   .hero-logo {
     width: 72px;
+  }
+
+  .section-heading-row {
+    flex-direction: column;
   }
 }

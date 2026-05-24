@@ -9,6 +9,7 @@ Flow primitives exposed to the HTTP layer:
     - activity_detail(call_id)              : one call's full prompt/response
     - enqueue(call_id)                      : mark a call for evaluation
     - evaluation_queue()                    : list pending evaluations
+    - clear_evaluation_queue()              : drop the pending queue
     - submit_verdict(call_id, score, ...)   : score it AND reground (record the
                                               correction into the grounding store)
 """
@@ -65,6 +66,11 @@ def _summary(prompt: str, limit: int = 80) -> str:
     return (s[:limit] + "…") if len(s) > limit else (s or "(empty prompt)")
 
 
+def _preview(text: str, limit: int = 100) -> str:
+    s = " ".join((text or "").split())
+    return (s[:limit] + "…") if len(s) > limit else (s or "")
+
+
 def _logged_prompt(event: Dict[str, Any]) -> str:
     """Prefer the original user-entered prompt when the observer captured it.
 
@@ -72,6 +78,20 @@ def _logged_prompt(event: Dict[str, Any]) -> str:
     raw LLM prompt payload for backward compatibility.
     """
     return str(event.get("raw_prompt") or event.get("user_prompt") or "")
+
+
+def _rag_state(event: Dict[str, Any]) -> Optional[str]:
+    """Best-effort RAG state for watcher rows.
+
+    Only answer-path events carry ``raw_prompt``. For those, the presence of the
+    labelled knowledge block means the answerer was grounded with retrieved
+    context. Other call types (judge, rewrite, etc.) return None.
+    """
+    raw_prompt = str(event.get("raw_prompt") or "").strip()
+    user_prompt = str(event.get("user_prompt") or "")
+    if not raw_prompt:
+        return None
+    return "RAG ON" if "--- Knowledge" in user_prompt else "RAG OFF"
 
 
 # --------------------------------------------------------------------------
@@ -151,8 +171,14 @@ def get_rag_instances() -> Dict[str, Any]:
             pass
     instances = store.list_instances()
     active = store.active_instance()
+    if active == "none":
+        active_display_name = "No RAG"
+    else:
+        desc = store.descriptor(active)
+        active_display_name = desc.display_name if desc else active
     return {
         "active": active,
+        "active_display_name": active_display_name,
         "instances": instances,
         "no_rag_option": {"name": "none", "display_name": "No RAG"},
     }
@@ -169,13 +195,17 @@ def set_active_rag(name: str) -> Dict[str, Any]:
         # instance-less reads skip retrieval. The store itself never gets a
         # ``none`` handle — set_active stores the sentinel for the read path.
         store.set_active_none()
-        return {"ok": True, "status": 200, "data": {"active": "none"}}
+        return {"ok": True, "status": 200,
+                "data": {"active": "none", "active_display_name": "No RAG"}}
     try:
         store.set_active(name)
     except ValueError as exc:
         return {"ok": False, "status": 422,
                 "error": "unknown_instance", "data": str(exc)}
-    return {"ok": True, "status": 200, "data": {"active": name}}
+    desc = store.descriptor(name)
+    return {"ok": True, "status": 200,
+            "data": {"active": name,
+                      "active_display_name": desc.display_name if desc else name}}
 
 
 def get_system_prompt() -> Dict[str, Any]:
@@ -215,7 +245,10 @@ def recent_activity(config: Config, limit: int = 25) -> Dict[str, Any]:
             "timestamp": ev.get("timestamp"),
             "endpoint": ev.get("endpoint"),
             "model": ev.get("model"),
+            "prompt_preview": _preview(_logged_prompt(ev)),
+            "response_preview": _preview(str(ev.get("response_text") or "")),
             "summary": _summary(_logged_prompt(ev)),
+            "rag_state": _rag_state(ev),
             "latency_ms": ev.get("latency_ms"),
             "status": _status(cid, queued, verdicts),
         })
@@ -237,6 +270,7 @@ def activity_detail(config: Config, call_id: str) -> Dict[str, Any]:
         "prompt": _logged_prompt(ev),
         "llm_prompt": ev.get("user_prompt"),
         "response": ev.get("response_text"),
+        "rag_state": _rag_state(ev),
         "thinking": ev.get("thinking"),
         "error": ev.get("error"),
         "status": _status(call_id, queued, verdicts),
@@ -312,6 +346,21 @@ def evaluation_queue(config: Config) -> Dict[str, Any]:
         })
     return {"items": items, "count": len(items),
             "reason_threshold": config.reason_threshold, "generated_at": iso_now()}
+
+
+def clear_evaluation_queue(config: Config) -> Dict[str, Any]:
+    """Drop every currently queued evaluation item.
+
+    This clears only the queue file; submitted verdicts remain in
+    ``verdicts.jsonl`` and still drive the evaluated status in Activity.
+    """
+    cleared = int(evaluation_queue(config).get("count") or 0)
+    try:
+        config.queue_file.unlink(missing_ok=True)
+    except OSError as exc:
+        return {"ok": False, "status": 500, "error": "queue_clear_failed", "data": str(exc)}
+    return {"ok": True, "status": 200,
+            "data": {"cleared": cleared, "generated_at": iso_now()}}
 
 
 def _score_to_rating(score: int) -> str:

@@ -82,6 +82,7 @@ async function loadRag() {
     const data = await resp.json();
     const instances = data.instances || [];
     const active = data.active;
+    const noneOption = data.no_rag_option || { name: "none", display_name: "No RAG" };
     // First-class "No RAG" option (value "none") + each instance.
     const options = [];
     instances.forEach((i) => {
@@ -93,9 +94,10 @@ async function loadRag() {
       options.push(`<option value="${name}"${isActive ? " selected" : ""}>${label}</option>`);
     });
     const noneActive = active === "none";
-    options.push(`<option value="none"${noneActive ? " selected" : ""}>No RAG${noneActive ? " (active)" : ""}</option>`);
+    const noneLabel = escapeHtml(noneOption.display_name || "No RAG");
+    options.push(`<option value="none"${noneActive ? " selected" : ""}>${noneLabel}${noneActive ? " (active)" : ""}</option>`);
     sel.innerHTML = options.join("");
-    updateActiveSummary(null, active);
+    updateActiveSummary(null, data.active_display_name || active);
   } catch (err) {
     sel.innerHTML = '<option value="">load failed</option>';
     msg.textContent = "Failed to load RAG instances: " + err;
@@ -116,7 +118,7 @@ async function applyRag() {
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "apply_failed");
-    msg.textContent = `Applied. Active RAG is now ${escapeHtml(data.active)}.`;
+    msg.textContent = `Applied. Active RAG is now ${escapeHtml(data.active_display_name || data.active)}.`;
     await loadRag();
   } catch (err) {
     msg.textContent = "Failed: " + err;

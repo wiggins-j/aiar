@@ -131,11 +131,16 @@ class Registry:
         if DEFAULT_INSTANCE not in self._entries:
             self._entries[DEFAULT_INSTANCE] = InstanceDescriptor(
                 name=DEFAULT_INSTANCE,
-                display_name="Default",
+                display_name="Example RAG",
                 collection=self._default_collection,
                 status="published",
                 published_at=_iso_now(),
             )
+            self._save()
+            return
+        desc = self._entries[DEFAULT_INSTANCE]
+        if desc.display_name in ("", "Default"):
+            desc.display_name = "Example RAG"
             self._save()
 
     def _save(self) -> None:

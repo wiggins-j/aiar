@@ -14,8 +14,8 @@ export MODEL_LIST_PREFIXES="qwen"          # Settings model dropdown filter (com
 
 # ---- RAG store -------------------------------------------------------------
 export AIAR_DB_PATH="$HOME/.aiar/knowledge"  # ChromaDB persistent dir
-export AIAR_CORPUS="aiar"                     # the "default" instance's collection name
-export RAG_INSTANCE="default"                 # active RAG instance (multi-instance; "none" = No RAG)
+export AIAR_CORPUS="aiar"                     # the built-in Example RAG / "default" instance's collection name
+export RAG_INSTANCE="default"                 # active RAG instance slug ("default" shows as "Example RAG" in the GUI; "none" = No RAG)
 export AIAR_EMBEDDING_MODEL="all-MiniLM-L6-v2"
 export RAG_TOP_K=3                            # chunks injected into the prompt
 

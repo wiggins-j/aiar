@@ -123,7 +123,9 @@ python -m aiar.rag.ingest /path/to/my/docs --instance mydocs --category mydocs
 The store persists at `~/.aiar/knowledge` (override with `AIAR_DB_PATH`). Docs
 land in the **active** RAG instance unless you pass `--instance <name>` (a new
 instance is created on first ingest; the default instance's collection name is
-`AIAR_CORPUS`, default `aiar`). To re-ingest from scratch, delete the store
+`AIAR_CORPUS`, default `aiar`). In the GUI, that built-in `default` instance is
+shown as **Example RAG**; CLI/API still use the slug `default`. To re-ingest
+from scratch, delete the store
 directory (`rm -rf ~/.aiar/knowledge`) and run ingest again.
 
 ---
@@ -135,6 +137,17 @@ tools) a **Collection Brief** — a single Markdown file that tells it which off
 sources to use, what's in/out of scope, how to split + tag files, and which safety
 rules to respect. The agent fetches + normalizes documents into a folder; you then
 ingest that folder exactly as in §3.
+
+Two common paths:
+
+- **Full Tesla demo:** start from
+  `examples/corpus-briefs/tesla-manual-expert-collection-brief.md`, collect the
+  corpus into `corpus/tesla/`, then ingest with
+  `python -m aiar.rag.ingest corpus/tesla --instance tesla`.
+- **Your own domain:** start from
+  `examples/corpus-briefs/collection-brief-builder-prompt.md`, let the AI write
+  `briefs/<name>-collection-brief.md`, collect docs into `corpus/<name>/`, then
+  ingest with `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
 
 ```bash
 # 1. Author your brief — copy the worked example and edit it...
@@ -224,12 +237,19 @@ Open <http://127.0.0.1:8088>. Four pages:
 
 - **Simulate** — run a prompt, see the answer + verdict, mark it for evaluation.
 - **Activity** — every LLM call the harness logged; mark any one for evaluation.
-- **Evaluation queue** — score marked answers 1–10 and reground.
+- **Evaluation queue** — score marked answers 1–10 and reground, or clear the pending queue.
 - **Settings** — switch the active Qwen model (from your installed Ollama models),
   switch the active RAG instance (or pick **No RAG**), and edit the harness
   system prompt — all live, no restart.
 
 (Host/port via `AIAR_WEB_HOST` / `AIAR_WEB_PORT`.)
+
+**Headless / no-browser note:** the core loop is already CLI-first
+(`aiar.rag.ingest`, `aiar.harness`, `aiar.eval.runner`). There is no separate
+first-class CLI for Activity / queue / Settings today, but the watcher exposes
+those same actions over a local JSON API once `python -m web.server` is
+running. That means on Ubuntu LTS or any headless box you can still SSH-forward
+the port and use `curl` instead of a browser.
 
 ---
 
@@ -314,9 +334,60 @@ curl -s -X POST localhost:8765/eval/prompt \
 # Record a correction:       POST /reground {"prompt":"...","score":3,"correction":"...","instance":"mydocs"}
 ```
 
+## Appendix: headless watcher API
+
+If you want the watcher's Activity / queue / Settings features without using a
+browser, start it as usual:
+
+```bash
+python -m web.server
+```
+
+Then drive the same features over its local JSON API:
+
+```bash
+# Simulate a prompt through the watcher:
+curl -s -X POST localhost:8088/api/simulate \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"How many days do I have to request a refund?","rag":true}'
+
+# Activity and queue:
+curl -s localhost:8088/api/activity
+curl -s "localhost:8088/api/activity/detail?call_id=<call-id>"
+curl -s -X POST localhost:8088/api/activity/evaluate \
+  -H 'content-type: application/json' \
+  -d '{"call_id":"<call-id>"}'
+curl -s localhost:8088/api/evaluation/queue
+curl -s -X POST localhost:8088/api/evaluation/verdict \
+  -H 'content-type: application/json' \
+  -d '{"call_id":"<call-id>","score":3,"correction":"The refund window is 30 days."}'
+curl -s -X POST localhost:8088/api/evaluation/clear \
+  -H 'content-type: application/json' \
+  -d '{}'
+
+# Live Settings actions:
+curl -s localhost:8088/api/models
+curl -s -X POST localhost:8088/api/models/active \
+  -H 'content-type: application/json' \
+  -d '{"model":"qwen2.5:7b"}'
+curl -s localhost:8088/api/rag/instances
+curl -s -X POST localhost:8088/api/rag/active \
+  -H 'content-type: application/json' \
+  -d '{"name":"default"}'
+curl -s localhost:8088/api/system-prompt
+curl -s -X POST localhost:8088/api/system-prompt \
+  -H 'content-type: application/json' \
+  -d '{"text":"You are a precise assistant."}'
+```
+
 ## Appendix: reset everything
 
 ```bash
 rm -rf ~/.aiar        # vector store + grounding + logs + eval queue + verdicts
 # Windows (PowerShell):  Remove-Item -Recurse -Force $HOME\.aiar
 ```
+
+## License
+
+AIAR is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE).

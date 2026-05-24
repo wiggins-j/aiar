@@ -1,5 +1,6 @@
 const REFRESH_MS = 6000;
 let reasonThreshold = 7;
+let pendingCount = 0;
 const drafts = new Map();
 
 function escapeHtml(value) {
@@ -77,10 +78,35 @@ async function refresh() {
   captureDrafts();
   const resp = await fetch("/api/evaluation/queue", { cache: "no-store" });
   const data = await resp.json();
+  pendingCount = Number(data.count || 0);
   reasonThreshold = data.reason_threshold ?? 7;
   render(data.items || []);
   document.getElementById("queue-label").textContent =
-    `${data.count} pending · updated ${fmtTime(data.generated_at)}`;
+    `${pendingCount} pending · updated ${fmtTime(data.generated_at)}`;
+  document.getElementById("clear-queue").disabled = pendingCount === 0;
+}
+
+async function clearQueue() {
+  const btn = document.getElementById("clear-queue");
+  const msg = document.getElementById("clear-queue-message");
+  if (pendingCount === 0) return;
+  if (!window.confirm(`Clear all ${pendingCount} pending queue item(s)?`)) return;
+  btn.disabled = true;
+  msg.textContent = "Clearing...";
+  try {
+    const resp = await fetch("/api/evaluation/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "failed");
+    drafts.clear();
+    msg.textContent = `Cleared ${data.cleared || 0} pending item(s).`;
+    await refresh();
+  } catch (err) {
+    msg.textContent = "Failed: " + err;
+  }
 }
 
 document.getElementById("queue").addEventListener("input", (e) => {
@@ -124,6 +150,8 @@ document.getElementById("queue").addEventListener("click", async (e) => {
     msg.textContent = "Failed: " + err;
   }
 });
+
+document.getElementById("clear-queue").addEventListener("click", clearQueue);
 
 async function loop() {
   try { await refresh(); } catch (e) {

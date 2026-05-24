@@ -1,4 +1,5 @@
 const REFRESH_MS = 5000;
+const expandedDetails = new Map();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -20,6 +21,14 @@ function statusBadge(status) {
   return `<span class="badge ${cls}">${escapeHtml(label)}${escapeHtml(score)}</span>`;
 }
 
+function metaLine(it) {
+  const parts = [fmtTime(it.timestamp)];
+  if (it.rag_state) parts.push(it.rag_state);
+  if (it.model) parts.push(it.model);
+  parts.push(`${escapeHtml(it.latency_ms || 0)}ms`);
+  return parts.map((p) => escapeHtml(p)).join(" · ");
+}
+
 function render(items) {
   const root = document.getElementById("activity");
   if (!items.length) {
@@ -30,17 +39,34 @@ function render(items) {
     <article class="list-item" data-call-id="${escapeHtml(it.call_id)}">
       <div class="top">
         <div>
-          <div class="title">${escapeHtml(it.summary)}</div>
-          <div class="meta">${escapeHtml(fmtTime(it.timestamp))} · ${escapeHtml(it.endpoint || "")} · ${escapeHtml(it.model || "")} · ${escapeHtml(it.latency_ms || 0)}ms</div>
+          <div class="activity-preview">
+            <div><strong>Prompt:</strong> ${escapeHtml(it.prompt_preview || "")}</div>
+            <div><strong>Response:</strong> ${escapeHtml(it.response_preview || "")}</div>
+          </div>
+          <div class="meta">${metaLine(it)}</div>
         </div>
         <div>${statusBadge(it.status)}</div>
       </div>
+      <div class="eval-actions">
+        <button class="secondary more-btn">${expandedDetails.has(it.call_id) ? "Less" : "More"}</button>
+      </div>
+      ${expandedDetails.has(it.call_id) ? renderDetails(expandedDetails.get(it.call_id)) : ""}
       <div class="eval-actions">
         <button class="secondary mark-btn"${(it.status && it.status.status !== "none") ? " disabled" : ""}>Mark for evaluation</button>
         <span class="mark-msg muted"></span>
       </div>
     </article>
   `).join("");
+}
+
+function renderDetails(detail) {
+  return `
+    <div class="activity-detail">
+      <div class="grid-2" style="margin-top:12px">
+        <div class="block"><h3>Prompt</h3><pre>${escapeHtml(detail.prompt || "")}</pre></div>
+        <div class="block"><h3>Response</h3><pre>${escapeHtml(detail.response || "")}</pre></div>
+      </div>
+    </div>`;
 }
 
 async function refresh() {
@@ -51,6 +77,30 @@ async function refresh() {
 }
 
 document.getElementById("activity").addEventListener("click", async (e) => {
+  const more = e.target.closest(".more-btn");
+  if (more) {
+    const card = more.closest(".list-item");
+    const callId = card.dataset.callId;
+    if (expandedDetails.has(callId)) {
+      expandedDetails.delete(callId);
+      await refresh();
+      return;
+    }
+    more.disabled = true;
+    try {
+      const resp = await fetch(`/api/activity/detail?call_id=${encodeURIComponent(callId)}`, { cache: "no-store" });
+      const data = await resp.json();
+      if (!resp.ok || !data.found) throw new Error(data.error || "detail_failed");
+      expandedDetails.set(callId, data);
+      await refresh();
+    } catch (err) {
+      more.disabled = false;
+      const msg = card.querySelector(".mark-msg");
+      msg.textContent = "Failed to load details: " + err;
+    }
+    return;
+  }
+
   const btn = e.target.closest(".mark-btn");
   if (!btn) return;
   const card = btn.closest(".list-item");

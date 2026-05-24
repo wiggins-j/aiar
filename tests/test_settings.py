@@ -117,6 +117,7 @@ def test_aiar_list_instances(fresh_store):
     by_name = {r["name"]: r for r in rows}
     assert "default" in by_name and "alpha" in by_name
     assert by_name["default"]["active"] is True
+    assert by_name["default"]["display_name"] == "Example RAG"
     assert by_name["alpha"]["active"] is False
     assert by_name["alpha"]["display_name"] == "Alpha Corpus"
     assert by_name["alpha"]["chunk_count"] == 1
@@ -156,6 +157,24 @@ def test_aiar_registry_persists_and_self_heals(fresh_store, tmp_path):
     fresh_store.reset_for_testing(base=tmp_path)
     names = {r["name"] for r in fresh_store.list_instances()}
     assert "orphan" in names
+
+
+def test_aiar_default_instance_label_migrates_from_legacy_default(tmp_path):
+    from aiar.rag import instances
+
+    reg_path = tmp_path / "knowledge" / "registry.json"
+    reg_path.parent.mkdir(parents=True, exist_ok=True)
+    reg_path.write_text(json.dumps({
+        "default": {
+            "name": "default",
+            "display_name": "Default",
+            "collection": "aiar",
+            "status": "published",
+        }
+    }), encoding="utf-8")
+
+    registry = instances.Registry(tmp_path, default_collection="aiar")
+    assert registry.get("default").display_name == "Example RAG"
 
 
 # ===========================================================================
@@ -465,13 +484,18 @@ def test_aiar_rag_instances_inprocess(fresh_store):
     names = {i["name"] for i in payload["instances"]}
     assert {"default", "alpha"} <= names
     assert payload["active"] == "default"
+    assert payload["active_display_name"] == "Example RAG"
+    by_name = {i["name"]: i for i in payload["instances"]}
+    assert by_name["default"]["display_name"] == "Example RAG"
     # set active to alpha
     res = aggregator.set_active_rag("alpha")
     assert res["ok"] and res["data"]["active"] == "alpha"
+    assert res["data"]["active_display_name"] == "Alpha"
     assert fresh_store.active_instance() == "alpha"
     # "none" is selectable
     res_none = aggregator.set_active_rag("none")
     assert res_none["ok"] and res_none["data"]["active"] == "none"
+    assert res_none["data"]["active_display_name"] == "No RAG"
 
 
 def test_aiar_system_prompt_inprocess():
