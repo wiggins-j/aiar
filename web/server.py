@@ -30,6 +30,7 @@ from urllib import parse
 from .aggregator import (
     activity_detail,
     clear_evaluation_queue,
+    clear_recent_activity,
     delete_rag_instance,
     delete_system_prompt_preset,
     enqueue,
@@ -179,6 +180,10 @@ class WatcherHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/evaluation/clear":
             result = clear_evaluation_queue(self.config)
             self._respond_result(result)
+            return
+
+        if parsed.path == "/api/activity/clear":
+            self._respond_result(clear_recent_activity())
             return
 
         if parsed.path == "/api/models/active":

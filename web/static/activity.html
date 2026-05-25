@@ -14,22 +14,28 @@
         <nav class="page-nav" aria-label="Primary">
           <a class="nav-pill" href="/">Simulate</a>
           <span class="nav-pill nav-pill-active">Activity</span>
-          <a class="nav-pill" href="/evaluation">Evaluation queue</a>
+          <a class="nav-pill" href="/evaluation">Evaluation Queue</a>
           <a class="nav-pill" href="/settings">Settings</a>
         </nav>
         <div class="hero-brand">
           <img class="hero-logo" src="/aiar-logo.png" alt="AIAR logo" />
           <div>
-            <h1>Recent activity</h1>
+            <h1>Recent Activity</h1>
             <p class="tagline">Every LLM call the harness logged. Mark any call for evaluation.</p>
           </div>
         </div>
       </header>
 
       <section class="panel">
-        <div class="section-heading">
-          <h2>Latest calls</h2>
-          <p id="refresh-label" class="muted">Loading...</p>
+        <div class="section-heading section-heading-row">
+          <div>
+            <h2>Latest Calls</h2>
+            <p id="refresh-label" class="muted">Loading...</p>
+          </div>
+          <div class="toolbar-row">
+            <button id="clear-activity" class="secondary">Clear Recent Activity</button>
+            <span id="clear-activity-message" class="muted"></span>
+          </div>
         </div>
         <div id="activity"></div>
       </section>

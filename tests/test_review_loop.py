@@ -36,6 +36,28 @@ def test_answer_prompt_uses_captured_call_id(monkeypatch):
     assert result["call_id"] == "call-123"
 
 
+def test_clear_recent_activity(tmp_path, monkeypatch):
+    """clear_recent_activity() wipes the observer call log; verdicts/queue (which
+    keep their own copies) are unaffected."""
+    from aiar.observability import observer
+    from web import aggregator
+    monkeypatch.setenv("AIAR_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.delenv("AIAR_OBSERVER_ENABLED", raising=False)
+    for i in range(2):
+        token = observer.set_context(endpoint="/test", raw_prompt=f"q{i}")
+        try:
+            observer.emit_call(model="m", system_prompt="s", user_prompt="u",
+                               options={}, format=None, think=False,
+                               response_text="a", thinking=None, prompt_tokens=1,
+                               completion_tokens=1, latency_ms=1, error=None)
+        finally:
+            observer.clear_context(token)
+    assert len(observer.read_recent(50)) == 2
+    res = aggregator.clear_recent_activity()
+    assert res["ok"] and res["data"]["cleared"] == 2
+    assert observer.read_recent(50) == []
+
+
 def test_simulate_forwards_judge_toggle(monkeypatch):
     """The Simulate page's LLM-judging toggle flows through to answer_prompt:
     judge=False skips the LLM-as-judge (no verdict)."""

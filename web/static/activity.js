@@ -1,5 +1,6 @@
 const REFRESH_MS = 5000;
 const expandedDetails = new Map();
+let totalCount = 0;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -16,7 +17,7 @@ function fmtTime(raw) {
 function statusBadge(status) {
   const s = (status && status.status) || "none";
   const cls = s === "complete" ? "badge-good" : s === "pending" ? "badge-partial" : "badge-neutral";
-  const label = (status && status.label) || "Not queued";
+  const label = (status && status.label) || "Not Queued";
   const score = status && status.score != null ? ` (${status.score})` : "";
   return `<span class="badge ${cls}">${escapeHtml(label)}${escapeHtml(score)}</span>`;
 }
@@ -52,7 +53,7 @@ function render(items) {
       </div>
       ${expandedDetails.has(it.call_id) ? renderDetails(expandedDetails.get(it.call_id)) : ""}
       <div class="eval-actions">
-        <button class="secondary mark-btn"${(it.status && it.status.status !== "none") ? " disabled" : ""}>Mark for evaluation</button>
+        <button class="secondary mark-btn"${(it.status && it.status.status !== "none") ? " disabled" : ""}>Mark for Evaluation</button>
         <span class="mark-msg muted"></span>
       </div>
     </article>
@@ -73,7 +74,31 @@ async function refresh() {
   const resp = await fetch("/api/activity", { cache: "no-store" });
   const data = await resp.json();
   render(data.items || []);
+  totalCount = Number(data.count || 0);
   document.getElementById("refresh-label").textContent = `Updated ${fmtTime(data.generated_at)} · ${data.count} calls`;
+  document.getElementById("clear-activity").disabled = totalCount === 0;
+}
+
+async function clearActivity() {
+  const btn = document.getElementById("clear-activity");
+  const msg = document.getElementById("clear-activity-message");
+  if (totalCount === 0) { msg.textContent = "Nothing to clear."; return; }
+  if (!window.confirm(`Clear all ${totalCount} logged call(s)? This cannot be undone.`)) return;
+  btn.disabled = true;
+  msg.textContent = "Clearing...";
+  try {
+    const resp = await fetch("/api/activity/clear", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "failed");
+    expandedDetails.clear();
+    msg.textContent = `Cleared ${data.cleared || 0} call(s).`;
+    await refresh();
+  } catch (err) {
+    msg.textContent = "Failed: " + err;
+    btn.disabled = false;
+  }
 }
 
 document.getElementById("activity").addEventListener("click", async (e) => {
@@ -121,6 +146,8 @@ document.getElementById("activity").addEventListener("click", async (e) => {
     btn.disabled = false;
   }
 });
+
+document.getElementById("clear-activity").addEventListener("click", clearActivity);
 
 async function loop() {
   try { await refresh(); } catch (e) {

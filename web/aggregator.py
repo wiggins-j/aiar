@@ -376,6 +376,15 @@ def recent_activity(config: Config, limit: int = 25) -> Dict[str, Any]:
     return {"items": items, "count": len(items), "generated_at": iso_now()}
 
 
+def clear_recent_activity() -> Dict[str, Any]:
+    """Clear the observer activity log (every logged LLM call). Submitted verdicts
+    and queued items keep their own copies, so the Evaluation queue is unaffected."""
+    from aiar.observability import observer
+    cleared = observer.clear()
+    return {"ok": True, "status": 200,
+            "data": {"cleared": cleared, "generated_at": iso_now()}}
+
+
 def activity_detail(config: Config, call_id: str) -> Dict[str, Any]:
     ev = observer.read_by_call_id(call_id)
     if not ev:
@@ -427,7 +436,7 @@ def _status(call_id: str, queued: Dict[str, Any], verdicts: Dict[str, Any]) -> D
                 "rating": v.get("rating")}
     if call_id in queued:
         return {"status": "pending", "label": "Pending", "score": None, "rating": None}
-    return {"status": "none", "label": "Not queued", "score": None, "rating": None}
+    return {"status": "none", "label": "Not Queued", "score": None, "rating": None}
 
 
 def enqueue(config: Config, call_id: str) -> Dict[str, Any]:

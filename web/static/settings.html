@@ -14,7 +14,7 @@
         <nav class="page-nav" aria-label="Primary">
           <a class="nav-pill" href="/">Simulate</a>
           <a class="nav-pill" href="/activity">Activity</a>
-          <a class="nav-pill" href="/evaluation">Evaluation queue</a>
+          <a class="nav-pill" href="/evaluation">Evaluation Queue</a>
           <span class="nav-pill nav-pill-active">Settings</span>
         </nav>
         <div class="hero-brand">
@@ -33,11 +33,11 @@
           <p class="muted">The Qwen model every harness/answer call uses. Source: live Ollama <code>/api/tags</code>.</p>
         </div>
         <label class="field" style="margin:0">
-          <span>Active model</span>
+          <span>Active Model</span>
           <select id="settings-model-select" class="settings-model-select"></select>
         </label>
         <div class="eval-actions">
-          <button id="apply-model">Apply model</button>
+          <button id="apply-model">Apply Model</button>
           <span id="model-message" class="muted"></span>
         </div>
         <p class="muted" id="model-note">Switch applies to the next LLM call; larger models are slower. A restart reverts to the env default.</p>
@@ -45,11 +45,11 @@
 
       <section class="panel">
         <div class="section-heading section-heading-tight">
-          <h2>RAG instance</h2>
+          <h2>RAG Instance</h2>
           <p class="muted">Which named corpus the answerer retrieves from. Pick <strong>No RAG</strong> to answer from the bare model.</p>
         </div>
         <label class="field" style="margin:0">
-          <span>Active RAG instance</span>
+          <span>Active RAG Instance</span>
           <select id="settings-rag-select" class="settings-rag-select"></select>
         </label>
         <div class="eval-actions">
@@ -62,32 +62,32 @@
 
       <section class="panel">
         <div class="section-heading section-heading-tight">
-          <h2>System prompt</h2>
+          <h2>System Prompt</h2>
           <p class="muted">The system prompt for the harness answer path only. It does <strong>not</strong> affect the judge or any other code-defined prompt.</p>
         </div>
         <label class="field" style="margin:0">
-          <span>Saved prompts</span>
+          <span>Saved Prompts</span>
           <select id="system-preset-select"></select>
         </label>
         <div class="eval-actions">
-          <button id="delete-preset" class="secondary">Delete preset</button>
+          <button id="delete-preset" class="secondary">Delete Preset</button>
           <span id="system-preset-message" class="muted"></span>
         </div>
         <label class="field">
-          <span>Harness answer system prompt</span>
+          <span>Harness Answer System Prompt</span>
           <textarea id="settings-system-prompt" rows="8" placeholder="Loading..."></textarea>
         </label>
         <div class="eval-actions">
           <button id="save-system">Save</button>
-          <button id="reset-system" class="secondary">Reset to default</button>
+          <button id="reset-system" class="secondary">Reset to Default</button>
           <span id="system-message" class="muted"></span>
         </div>
         <label class="field" style="margin:0">
-          <span>Quick-save current prompt as a preset</span>
+          <span>Quick-Save Current Prompt as a Preset</span>
           <input id="system-preset-name" type="text" maxlength="60" placeholder="Preset name (up to 5 saved)" />
         </label>
         <div class="eval-actions">
-          <button id="save-preset">Save preset</button>
+          <button id="save-preset">Save Preset</button>
         </div>
       </section>
 

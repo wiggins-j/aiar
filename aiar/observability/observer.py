@@ -265,6 +265,30 @@ def read_by_call_id(call_id: str) -> "Optional[dict[str, Any]]":
     return None
 
 
+def clear() -> int:
+    """Delete every ``calls-*.jsonl`` activity log. Returns the number of call
+    records removed. Best-effort — never raises. The active log is recreated on
+    the next logged call."""
+    removed = 0
+    try:
+        d = _resolve_log_dir()
+        if not d.exists():
+            return 0
+        for p in d.glob("calls-*.jsonl"):
+            try:
+                with p.open("r", encoding="utf-8") as f:
+                    removed += sum(1 for line in f if line.strip())
+            except OSError:
+                pass
+            try:
+                p.unlink()
+            except OSError as exc:
+                _log.warning("observer.clear skipped %s: %s", p, exc)
+    except Exception as exc:
+        _log.warning("observer.clear failed: %s", exc)
+    return removed
+
+
 def prune_old(retention_days: int) -> int:
     """Delete ``calls-*.jsonl`` files older than ``retention_days``.
     ``<= 0`` means keep forever (no-op). Returns count deleted."""

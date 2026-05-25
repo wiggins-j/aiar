@@ -734,6 +734,26 @@ def test_aiar_simulate_page_parity():
     assert '$("judge").checked' in js
 
 
+def test_aiar_activity_clear_parity():
+    """The Activity page has a Clear Recent Activity control wired to the API."""
+    from pathlib import Path
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
+    assert "clear-activity" in (static / "activity.html").read_text()
+    assert "/api/activity/clear" in (static / "activity.js").read_text()
+
+
+def test_aiar_titles_title_cased():
+    """GUI headings/labels use Title Case (regression guard for the casing pass)."""
+    from pathlib import Path
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
+    activity = (static / "activity.html").read_text()
+    settings = (static / "settings.html").read_text()
+    assert "Recent Activity" in activity and "Recent activity" not in activity
+    assert "Evaluation Queue" in (static / "evaluation.html").read_text()
+    for label in ("RAG Instance", "System Prompt", "Active Model", "Reset to Default"):
+        assert label in settings
+
+
 def test_aiar_nav_pill_added_all_pages():
     from pathlib import Path
     static = Path(__file__).resolve().parents[1] / "web" / "static"
