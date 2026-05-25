@@ -17,6 +17,46 @@ another machine, keep it behind an additional security layer you control, such a
 If you bind AIAR to `0.0.0.0`, do so only when you have already put those network
 controls in place.
 
+## Fastest install path
+
+For a fresh local setup, prefer the package-extras install path:
+
+```bash
+git clone https://github.com/wiggins-j/aiar.git
+cd aiar
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[rag]'
+```
+
+If you also want the optional FastAPI harness service:
+
+```bash
+pip install -e '.[rag,service]'
+```
+
+After pulling a local Qwen model with Ollama and setting `OLLAMA_MODEL`, run:
+
+```bash
+aiar-doctor
+```
+
+`aiar-doctor` verifies the Python version, optional RAG dependencies, Ollama,
+active model visibility, RAG store readiness, and the bundled example corpus.
+
+## 5-minute demo
+
+Once `aiar-doctor` passes:
+
+```bash
+python -m aiar.rag.ingest ./examples/docs --instance default
+python -m aiar.harness "How many days do I have to request a refund?"
+python -m web.server
+```
+
+Then open `http://127.0.0.1:8088` and use the **Example RAG** / `default`
+instance.
+
 ## ⚡ Quick start: hand this to your AI
 
 New here? Don't read the docs — **copy the block below and paste it into any
@@ -144,7 +184,8 @@ exact names) — AIAR is entirely environment-driven.
     correction)? — (recommended: `7`.) → sets AIAR_REASON_THRESHOLD
 13. Do I also want the optional HTTP harness service (FastAPI)? — (recommended:
     NO for now; the CLI + GUI need none of it. If yes, also
-    `pip install -r requirements-service.txt` and run
+    `pip install -e '.[rag,service]'` and run
+    (fallback: `pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt`)
     `uvicorn aiar.harness.service:app --port 8765`.) If I want to reach it from
     another machine, recommend keeping it behind Tailscale, another VPN, SSH
     port forwarding, or equivalent trusted-network controls.
@@ -186,7 +227,9 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
 `ollama list`.
 
 === STEP 3: Install AIAR ===
-From the repo root: create and activate a venv, then install core + RAG stack:
+From the repo root: create and activate a venv, then install AIAR with the RAG
+extra. Prefer the package-extras path below; the requirements-files path is the
+equivalent fallback if needed:
   Use the Python launcher that actually exists on that machine:
   - Linux/macOS: usually `python3`
   - Windows: usually `py`
@@ -195,11 +238,16 @@ From the repo root: create and activate a venv, then install core + RAG stack:
   # activate — Linux/macOS:  source .venv/bin/activate
   #            Windows (PowerShell):  .venv\Scripts\Activate.ps1
   #            Windows (cmd):         .venv\Scripts\activate.bat
-  pip install -r requirements.txt -r requirements-rag.txt
-(`requirements.txt` is the core; `requirements-rag.txt` adds the vector store,
-embeddings, BM25, and reranker — install both.) Then export OLLAMA_MODEL and the
-other config vars from STEP 0 (you can `source config.example` and edit, or set
-them directly). Confirm `<python-launcher> -c "import aiar"` works.
+  pip install -e '.[rag]'
+  # optional equivalent fallback:
+  # pip install -r requirements.txt -r requirements-rag.txt
+If I also asked for the optional HTTP harness service, install:
+  pip install -e '.[rag,service]'
+  # optional equivalent fallback:
+  # pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt
+Then export OLLAMA_MODEL and the other config vars from STEP 0 (you can
+`source config.example` and edit, or set them directly). Confirm both
+`<python-launcher> -c "import aiar"` and `aiar-doctor` work.
 
 === STEP 4: Ingest my documents into the RAG ===
 IMPORTANT — run ingest ON THE MACHINE THAT HOSTS THE MODEL + AIAR STORE. Ingest
@@ -416,6 +464,20 @@ the answer better*, and *closing the loop* when they didn't.
 | `aiar/observability` | JSONL logging of every LLM call (the GUI tails this) |
 | `web/` | the stdlib-only watcher GUI: Simulate / Activity / Evaluation / Settings pages |
 
+## Releasing AIAR
+
+Keep the GitHub repo as the source of truth, but publish actual tagged
+releases on top of it.
+
+- Continue developing in the repo as normal.
+- When you want a real release, bump the version in
+  [pyproject.toml](/Users/wiggins/GitHub/aiar/pyproject.toml) and
+  [aiar/__init__.py](/Users/wiggins/GitHub/aiar/aiar/__init__.py), run the test
+  suite, run `aiar-doctor`, create a tag like `v0.1.1`, push the tag, and create
+  a GitHub Release from that tag.
+- PyPI is optional. AIAR can ship successfully as a GitHub-first project if
+  `git clone` / `pip install -e '.[rag]'` is your primary install path.
+
 ## Quickstart
 
 Use the Python launcher that exists on your machine: on many macOS/Linux setups
@@ -432,18 +494,21 @@ ollama pull qwen2.5:7b          # or qwen2.5:3b (laptops), qwen3:14b (stronger),
 
 # 2. Install AIAR + the RAG stack
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt -r requirements-rag.txt
+pip install -e '.[rag]'
 
 # 3. Tell AIAR which model to use (the tag you pulled above)
 export OLLAMA_MODEL="qwen2.5:7b"                     # Windows: $env:OLLAMA_MODEL="qwen2.5:7b"
 
-# 4. Ingest YOUR documents
+# 4. Verify the install
+aiar-doctor
+
+# 5. Ingest YOUR documents
 python -m aiar.rag.ingest ./examples/docs
 
-# 5. Ask a question
+# 6. Ask a question
 python -m aiar.harness "How many days do I have to request a refund?"
 
-# 6. Launch the GUI (Simulate → mark → evaluate → reground)
+# 7. Launch the GUI (Simulate → mark → evaluate → reground)
 python -m web.server      # http://127.0.0.1:8088
 ```
 
@@ -534,9 +599,10 @@ vector retrieval — turn them on to trade a little latency for relevance.
   <https://huggingface.co/collections/Qwen/qwen35> and
   <https://huggingface.co/collections/Qwen/qwen36> (always check these for the
   latest models).
-- `requirements.txt` (core) + `requirements-rag.txt` (vector store + reranker).
-  The RAG stack is optional: without it the store is unavailable and the harness
-  answers from the bare model.
+- Preferred install: `pip install -e '.[rag]'`. Equivalent fallback:
+  `pip install -r requirements.txt -r requirements-rag.txt`. The RAG stack is
+  optional: without it the store is unavailable and the harness answers from the
+  bare model.
 
 ## License
 

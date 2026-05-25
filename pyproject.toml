@@ -32,6 +32,7 @@ dev = ["pytest>=7.0"]
 aiar-ingest = "aiar.rag.ingest:main"
 aiar-harness = "aiar.harness.__main__:main"
 aiar-eval = "aiar.eval.runner:main"
+aiar-doctor = "aiar.doctor:main"
 
 [tool.setuptools.packages.find]
 include = ["aiar*", "web*"]

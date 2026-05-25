@@ -102,8 +102,11 @@ python -m venv .venv
 source .venv/bin/activate              # Windows (PowerShell): .venv\Scripts\Activate.ps1
                                        # Windows (cmd):        .venv\Scripts\activate.bat
 
-# Core + the RAG stack (vector store, embeddings, BM25, reranker)
-pip install -r requirements.txt -r requirements-rag.txt
+# Preferred install: package extras (core + RAG stack)
+pip install -e '.[rag]'
+
+# Equivalent fallback if you prefer requirements files:
+# pip install -r requirements.txt -r requirements-rag.txt
 ```
 
 Point AIAR at the model you pulled (this is the ONLY model setting):
@@ -111,6 +114,12 @@ Point AIAR at the model you pulled (this is the ONLY model setting):
 ```bash
 export OLLAMA_MODEL="qwen2.5:7b"       # whatever you pulled in step 1
 #   Windows (PowerShell):  $env:OLLAMA_MODEL="qwen2.5:7b"
+```
+
+Verify the install before ingesting:
+
+```bash
+aiar-doctor
 ```
 
 Optional: source the full config template so every path/flag has a value:
@@ -369,7 +378,9 @@ security layer. For remote access, prefer Tailscale, another private VPN, SSH
 port forwarding, or an equivalent trusted reverse-proxy/firewall setup.
 
 ```bash
-pip install -r requirements-service.txt
+pip install -e '.[rag,service]'
+# equivalent fallback:
+# pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt
 uvicorn aiar.harness.service:app --port 8765
 
 # Answer + judge:

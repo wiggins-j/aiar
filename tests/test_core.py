@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from aiar import doctor
 from aiar.rag.ingest import ingest_folder, ingest_file, Chunk
 from aiar.eval.scorer import score_answer
 from aiar.eval.judge import judge_answer
@@ -116,3 +117,34 @@ def test_answer_prompt_refuses_when_rag_has_no_context(monkeypatch):
     assert out["latency_ms"] == 0
     assert out["call_id"] is None
     assert out["grounded"] is False
+
+
+def test_doctor_reports_healthy_install(monkeypatch):
+    monkeypatch.setattr(doctor, "_module_present", lambda name: True)
+    monkeypatch.setattr("aiar.llm.healthcheck", lambda: True)
+    monkeypatch.setattr("aiar.llm.active_model", lambda: "qwen2.5:7b")
+    monkeypatch.setattr("aiar.llm.list_models",
+                        lambda show_all=False: [{"name": "qwen2.5:7b"}])
+    monkeypatch.setattr("aiar.rag.store.init", lambda: None)
+    monkeypatch.setattr("aiar.rag.store.is_ready", lambda: True)
+
+    report = doctor.run_checks()
+    assert report["overall"] == "pass"
+    assert any(c["name"] == "ollama" and c["level"] == "pass" for c in report["checks"])
+    assert any(c["name"] == "rag_store" and c["level"] == "pass" for c in report["checks"])
+
+
+def test_doctor_fails_when_ollama_and_rag_deps_missing(monkeypatch):
+    monkeypatch.setattr(
+        doctor,
+        "_module_present",
+        lambda name: name not in {"chromadb", "sentence_transformers", "rank_bm25"},
+    )
+    monkeypatch.setattr("aiar.llm.healthcheck", lambda: False)
+    monkeypatch.setattr("aiar.llm.active_model", lambda: "qwen2.5:7b")
+    monkeypatch.setattr("aiar.llm.list_models", lambda show_all=False: [])
+
+    report = doctor.run_checks()
+    assert report["overall"] == "fail"
+    assert any(c["name"] == "rag_deps" and c["level"] == "fail" for c in report["checks"])
+    assert any(c["name"] == "ollama" and c["level"] == "fail" for c in report["checks"])

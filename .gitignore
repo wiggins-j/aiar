@@ -20,6 +20,7 @@ corpus/
 # Local-only demo / recording scripts + private collections — never published
 # (name any private brief/schema/corpus/collector files *.local.md / .json / .py)
 DEMO_RECORDING.md
+RELEASING.md
 *.local.md
 *.local.json
 *.local.py
