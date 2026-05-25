@@ -176,6 +176,12 @@ other config vars from STEP 0 (you can `source config.example` and edit, or set
 them directly). Confirm `<python-launcher> -c "import aiar"` works.
 
 === STEP 4: Ingest my documents into the RAG ===
+IMPORTANT — run ingest ON THE MACHINE THAT HOSTS THE MODEL + AIAR STORE. Ingest
+writes embeddings into the store at AIAR_DB_PATH (default ~/.aiar/knowledge) on
+the box where the command runs. If the model + infrastructure live on a server
+(a remote/isolated setup, or if I chose `scan remote <host>` in STEP 0), run the
+ingest THERE over SSH — not on the laptop — or the vectors land in the wrong
+store and the harness/GUI on the host won't retrieve them.
 AIAR ingests a folder of documents. Two ways to fill that folder:
   (a) MANUAL — I already have a folder of .txt/.md/.json files.
   (b) AI-DRIVEN — an AI builds the corpus from a "Collection Brief" (see the

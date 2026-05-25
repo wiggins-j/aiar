@@ -109,6 +109,13 @@ source config.example      # then edit the exports to taste
 Put your documents in a folder. Supported types: `.txt`, `.md`, `.markdown`,
 `.rst`, `.json`. (AIAR ships a tiny example corpus in `examples/docs`.)
 
+> **Run ingest on the machine that hosts the model + AIAR store.** Ingest writes
+> embeddings into the store at `AIAR_DB_PATH` (default `~/.aiar/knowledge`) on the
+> box where it runs. If your model and infrastructure live on a server (e.g. a
+> remote/isolated setup, or `scan remote <host>`), run ingest **there** — over SSH
+> on that host — not on your laptop. Ingesting on a different machine writes the
+> vectors to the wrong store, and the harness/GUI on the host won't see them.
+
 ```bash
 # Preview what would be ingested (no writes):
 python -m aiar.rag.ingest ./examples/docs --dry-run
