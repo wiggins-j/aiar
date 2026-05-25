@@ -18,12 +18,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class Chunk:
     chunk_index: int
     text: str
     category: str = "general"
+    metadata: Dict[str, object] = field(default_factory=dict)
 
 
 def _json_to_text(raw: str) -> str:
@@ -76,7 +78,8 @@ def _json_to_text(raw: str) -> str:
     return render(data)
 
 
-def _chunk_text(source: str, title: str, text: str, category: str) -> List[Chunk]:
+def _chunk_text(source: str, title: str, text: str, category: str,
+                metadata: "Dict[str, object] | None" = None) -> List[Chunk]:
     """Split text into overlapping chunks on paragraph boundaries."""
     paragraphs = [p.strip() for p in text.replace("\r\n", "\n").split("\n\n") if p.strip()]
     if not paragraphs:
@@ -85,11 +88,13 @@ def _chunk_text(source: str, title: str, text: str, category: str) -> List[Chunk
     chunks: List[Chunk] = []
     current = ""
     prev_tail = ""
+    chunk_meta = dict(metadata or {})
     for para in paragraphs:
         if len(current) + len(para) > _CHUNK_TARGET_CHARS and current:
             chunks.append(Chunk(
                 source=source, title=title, chunk_index=len(chunks),
                 text=(prev_tail + current).strip(), category=category,
+                metadata=dict(chunk_meta),
             ))
             prev_tail = current[-_CHUNK_OVERLAP_CHARS:]
             current = ""
@@ -98,6 +103,7 @@ def _chunk_text(source: str, title: str, text: str, category: str) -> List[Chunk
         chunks.append(Chunk(
             source=source, title=title, chunk_index=len(chunks),
             text=(prev_tail + current).strip(), category=category,
+            metadata=dict(chunk_meta),
         ))
     return chunks
 
@@ -109,11 +115,21 @@ def ingest_file(path: Path, *, category: str = "general") -> List[Chunk]:
     except OSError as exc:
         logger.warning("ingest: could not read %s: %s", path, exc)
         return []
+    front_matter = {}
+    body = raw
+    if path.suffix.lower() in _TEXT_SUFFIXES:
+        try:
+            from aiar.rag import metadata as rag_metadata
+            front_matter, body = rag_metadata.parse_front_matter(raw)
+        except Exception:
+            front_matter, body = {}, raw
     if path.suffix.lower() in _JSON_SUFFIXES:
         text = _json_to_text(raw)
     else:
-        text = raw
-    return _chunk_text(str(path), path.stem, text, category)
+        text = body
+    doc_meta = dict(front_matter)
+    doc_meta["document_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return _chunk_text(str(path), path.stem, text, category, metadata=doc_meta)
 
 
 def iter_documents(folder: Path) -> Iterable[Path]:

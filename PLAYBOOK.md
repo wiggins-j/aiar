@@ -5,6 +5,22 @@ documents, run the harness, turn on the reranker + grounding, launch the GUI,
 simulate a prompt, evaluate it, **reground**, and verify the regrounded answer
 improved. Real commands, real paths.
 
+## Security note
+
+AIAR is intended for local use or other trusted-network use by default. The
+watcher GUI (`python -m web.server`, typically `127.0.0.1:8088`) and the
+optional HTTP harness service (`uvicorn aiar.harness.service:app --port 8765`)
+are not presented as hardened, public-internet services. If you want to reach
+AIAR from another machine, keep it behind an additional security layer you
+control, such as:
+
+- a private VPN / mesh network like [Tailscale](https://tailscale.com/)
+- SSH port forwarding / tunneling
+- a private firewall or reverse proxy on a trusted network
+
+If you bind AIAR to `0.0.0.0`, do so only when those network controls are
+already in place.
+
 Every shell line below assumes you are in the repo root (wherever you cloned
 AIAR, e.g. `~/aiar`). AIAR is **OS-agnostic** — Linux (incl. Ubuntu LTS
 servers), macOS, and Windows. Shell snippets use Linux/macOS syntax; Windows
@@ -24,7 +40,8 @@ Windows).
   mid-size 7–8B model needs ~5 GB disk and ~8 GB RAM (or ~6 GB VRAM).
 - **Headless server note:** the CLI/A-B runner need no GUI. For the watcher GUI
   on a remote box, SSH-forward the port (`ssh -L 8088:127.0.0.1:8088 me@server`)
-  or set `AIAR_WEB_HOST=0.0.0.0` behind a firewall/tunnel.
+  or set `AIAR_WEB_HOST=0.0.0.0` only behind a trusted security layer such as
+  Tailscale, another VPN, SSH tunneling, or a private firewall/reverse proxy.
 
 ---
 
@@ -267,6 +284,10 @@ Open <http://127.0.0.1:8088>. Four pages:
 
 (Host/port via `AIAR_WEB_HOST` / `AIAR_WEB_PORT`.)
 
+Keep the watcher on loopback by default. If you need remote access, prefer
+Tailscale, another private VPN, or SSH port forwarding; only bind to
+`0.0.0.0` behind equivalent trusted network controls.
+
 **Headless / no-browser note:** the core loop is already CLI-first
 (`aiar.rag.ingest`, `aiar.harness`, `aiar.eval.runner`). There is no separate
 first-class CLI for Activity / queue / Settings today, but the watcher exposes
@@ -342,6 +363,10 @@ The second answer reflects the grounded correction. That's the full loop:
 ## Appendix: optional HTTP harness service
 
 If you'd rather drive the harness over HTTP (instead of the in-process CLI/GUI):
+
+Keep this service bound to loopback unless you have added your own network
+security layer. For remote access, prefer Tailscale, another private VPN, SSH
+port forwarding, or an equivalent trusted reverse-proxy/firewall setup.
 
 ```bash
 pip install -r requirements-service.txt

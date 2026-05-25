@@ -58,8 +58,6 @@ def _instance_prompts(instance: "str | None") -> "tuple[str, str]":
     hard-codes domain text.
     """
     rewrite_sys, hyde_sys = _REWRITE_SYS, _HYDE_SYS
-    if instance is None:
-        return rewrite_sys, hyde_sys
     try:
         from aiar.rag import store
         desc = store.descriptor(instance)

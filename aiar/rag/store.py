@@ -19,11 +19,12 @@ instance.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from aiar.rag import instances
 from aiar.rag.ingest import Chunk
@@ -313,25 +314,51 @@ def add(chunks: List[Chunk], *, instance: str) -> int:
     if col is None or not chunks:
         return 0
     try:
-        ids = [_chunk_id(c) for c in chunks]
-        existing: set = set()
-        for i in range(0, len(ids), _MAX_ADD_BATCH):
-            got = col.get(ids=ids[i:i + _MAX_ADD_BATCH])
-            existing.update(got.get("ids") or [])
-        new = [(c, i) for c, i in zip(chunks, ids) if i not in existing]
-        if not new:
-            return 0
-        new_chunks, new_ids = zip(*new)
-        embeddings = _embedder.encode([c.text for c in new_chunks]).tolist()
-        documents = [c.text for c in new_chunks]
-        metadatas = [{"source": c.source, "title": c.title,
-                      "index": c.chunk_index, "category": c.category}
-                     for c in new_chunks]
-        for i in range(0, len(new_chunks), _MAX_ADD_BATCH):
-            sl = slice(i, i + _MAX_ADD_BATCH)
-            col.add(ids=list(new_ids[sl]), embeddings=embeddings[sl],
-                    documents=documents[sl], metadatas=metadatas[sl])
-        return len(new_chunks)
+        changed = False
+        added = 0
+        by_source: Dict[str, List[Chunk]] = {}
+        for chunk in chunks:
+            by_source.setdefault(chunk.source, []).append(chunk)
+        for source_chunks in by_source.values():
+            source_chunks.sort(key=lambda c: c.chunk_index)
+            doc_hash = str(source_chunks[0].metadata.get("document_hash") or "")
+            existing = col.get(where={"source": source_chunks[0].source},
+                               include=["metadatas"])
+            existing_ids = list(existing.get("ids") or [])
+            existing_metas = list(existing.get("metadatas") or [])
+            existing_hashes = {
+                str(meta.get("document_hash") or "")
+                for meta in existing_metas
+                if isinstance(meta, dict) and meta.get("document_hash") is not None
+            }
+            unchanged = (
+                doc_hash
+                and existing_ids
+                and len(existing_ids) == len(source_chunks)
+                and existing_hashes == {doc_hash}
+            )
+            if unchanged:
+                continue
+            if existing_ids:
+                col.delete(ids=existing_ids)
+                changed = True
+            ids = [_chunk_id(c) for c in source_chunks]
+            embeddings = _embedder.encode([c.text for c in source_chunks]).tolist()
+            documents = [c.text for c in source_chunks]
+            metadatas = [_chunk_metadata(c) for c in source_chunks]
+            for i in range(0, len(source_chunks), _MAX_ADD_BATCH):
+                sl = slice(i, i + _MAX_ADD_BATCH)
+                col.add(ids=list(ids[sl]), embeddings=embeddings[sl],
+                        documents=documents[sl], metadatas=metadatas[sl])
+            added += len(source_chunks)
+            changed = True
+        if changed:
+            try:
+                from aiar.rag import lexical
+                lexical.invalidate(instance=instance)
+            except Exception:
+                pass
+        return added
     except Exception as exc:
         logger.error("store: add failed: %s", exc)
         return 0
@@ -492,3 +519,25 @@ def reset_for_testing(*, base: Optional[Path] = None) -> None:
 def _chunk_id(chunk: Chunk) -> str:
     src_hash = hashlib.sha256(chunk.source.encode()).hexdigest()[:8]
     return f"{src_hash}-{chunk.chunk_index}"
+
+
+def _chunk_metadata(chunk: Chunk) -> dict:
+    meta: Dict[str, Any] = {
+        "source": chunk.source,
+        "title": chunk.title,
+        "index": chunk.chunk_index,
+        "category": chunk.category,
+    }
+    for key, value in (chunk.metadata or {}).items():
+        meta[str(key)] = _normalize_metadata_value(value)
+    return meta
+
+
+def _normalize_metadata_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)

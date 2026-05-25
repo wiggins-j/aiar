@@ -36,9 +36,9 @@ def fresh_store(tmp_path, monkeypatch):
 
 
 def _chunk(source: str, text: str, idx: int = 0, title: str = "Doc",
-           category: str = "general") -> Chunk:
+           category: str = "general", metadata: "dict | None" = None) -> Chunk:
     return Chunk(source=source, title=title, chunk_index=idx, text=text,
-                 category=category)
+                 category=category, metadata=dict(metadata or {}))
 
 
 # ===========================================================================
@@ -109,6 +109,47 @@ def test_aiar_add_batches_over_cap(fresh_store, monkeypatch):
               for i in range(5)]
     assert fresh_store.add(chunks, instance="big") == 5   # 5 items, batch size 2
     assert fresh_store.chunk_count(instance="big") == 5
+
+
+def test_aiar_store_persists_chunk_metadata(fresh_store):
+    fresh_store.create_instance("health")
+    fresh_store.add([
+        _chunk(
+            "m.md",
+            "Melatonin evidence summary",
+            metadata={
+                "claim_type": "guideline",
+                "authority_level": 1,
+                "condition": "insomnia",
+                "document_hash": "abc123",
+            },
+        )
+    ], instance="health")
+    hits = fresh_store.query_scored("melatonin", instance="health")
+    assert hits
+    meta = hits[0].metadata
+    assert meta["claim_type"] == "guideline"
+    assert meta["authority_level"] == 1
+    assert meta["condition"] == "insomnia"
+
+
+def test_aiar_store_reingest_replaces_stale_chunks(fresh_store):
+    fresh_store.create_instance("health")
+    first = _chunk(
+        "label.md",
+        "Old dosage guidance",
+        metadata={"document_hash": "old-hash", "claim_type": "drug_label"},
+    )
+    second = _chunk(
+        "label.md",
+        "Updated dosage guidance",
+        metadata={"document_hash": "new-hash", "claim_type": "drug_label"},
+    )
+    assert fresh_store.add([first], instance="health") == 1
+    assert fresh_store.add([second], instance="health") == 1
+    hits = fresh_store.query_scored("updated dosage", instance="health")
+    assert hits and hits[0].text == "Updated dosage guidance"
+    assert fresh_store.chunk_count(instance="health") == 1
 
 
 def test_aiar_instance_isolation(fresh_store):
@@ -314,6 +355,26 @@ def test_aiar_query_rewrite_instance_kwarg(fresh_store, monkeypatch):
     captured.clear()
     query_rewrite.transform("what is y", instance="default")
     assert "ALPHA-SPECIFIC" not in captured["system"]
+
+
+def test_aiar_query_rewrite_uses_active_instance_prompts(fresh_store, monkeypatch):
+    from aiar.rag import query_rewrite
+    captured = {}
+
+    def fake_call(system, user, **kwargs):
+        captured["system"] = system
+        return ("rewritten query", 5)
+
+    monkeypatch.setenv("RAG_QUERY_REWRITE_MODE", "rewrite")
+    monkeypatch.setattr("aiar.llm.call_ollama", fake_call)
+    fresh_store.create_instance(
+        "health-rag",
+        query_rewrite={"rewrite_system": "HEALTH REWRITE PROMPT"},
+    )
+    fresh_store.set_active("health-rag")
+    out = query_rewrite.transform("what can i take")
+    assert out == "rewritten query"
+    assert captured["system"] == "HEALTH REWRITE PROMPT"
 
 
 # ===========================================================================

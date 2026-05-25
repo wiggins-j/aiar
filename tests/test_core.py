@@ -10,6 +10,7 @@ from aiar.rag.ingest import ingest_folder, ingest_file, Chunk
 from aiar.eval.scorer import score_answer
 from aiar.eval.judge import judge_answer
 from aiar.eval.schemas import Verdict
+from aiar.harness import pipeline
 from aiar.grounding import store as grounding_store
 from aiar.grounding.reinject import grounding_block
 
@@ -31,6 +32,25 @@ def test_ingest_json(tmp_path):
     chunks = ingest_file(p)
     assert chunks
     assert "30" in chunks[0].text
+
+
+def test_ingest_file_strips_front_matter_and_keeps_metadata(tmp_path):
+    p = tmp_path / "record.md"
+    p.write_text(
+        "---\n"
+        "claim_type: guideline\n"
+        "authority_level: 1\n"
+        "condition: insomnia\n"
+        "---\n\n"
+        "# Body\n\n"
+        "Melatonin is not strongly recommended for chronic insomnia.\n",
+        encoding="utf-8",
+    )
+    chunks = ingest_file(p)
+    assert chunks
+    assert "claim_type:" not in chunks[0].text
+    assert chunks[0].metadata["claim_type"] == "guideline"
+    assert chunks[0].metadata["authority_level"] == 1
 
 
 # ---- deterministic scorer --------------------------------------------------
@@ -60,7 +80,7 @@ def test_judge_handles_garbage_with_mock():
     def fake_caller(system, user, **kwargs):
         return ("not json at all", 5)
     v = judge_answer("q", "a", llm_caller=fake_caller)
-    assert v.rating == "bad" and "judge_unparseable" in v.failure_tags
+    assert v.rating == "partial" and "judge_unparseable" in v.failure_tags
 
 
 # ---- grounding store + reinjection -----------------------------------------
@@ -81,3 +101,18 @@ def test_grounding_block_renders_correction(tmp_path, monkeypatch):
     block = grounding_block("test prompt", force=True)
     assert "the right answer" in block
     grounding_store.reset_default_store_for_testing()
+
+
+def test_answer_prompt_refuses_when_rag_has_no_context(monkeypatch):
+    monkeypatch.setattr("aiar.rag.retriever.get_context", lambda *args, **kwargs: "")
+    monkeypatch.setattr("aiar.grounding.reinject.grounding_block", lambda *args, **kwargs: "")
+    monkeypatch.setattr("aiar.grounding.reinject.reinjection_enabled", lambda: False)
+    monkeypatch.setattr("aiar.eval.judge.judge_answer",
+                        lambda prompt, response, context: Verdict(
+                            rating="good", reason="refused safely",
+                            failure_tags=[], confidence="high"))
+    out = pipeline.answer_prompt("medical question", rag=True, judge=True)
+    assert "don't have enough evidence" in out["answer"].lower()
+    assert out["latency_ms"] == 0
+    assert out["call_id"] is None
+    assert out["grounded"] is False

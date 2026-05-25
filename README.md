@@ -2,6 +2,21 @@
   <img src="web/static/aiar-logo.png" alt="AIAR logo" width="280" />
 </p>
 
+## Security note
+
+AIAR is intended for **local use or other trusted-network use by default**. The
+watcher GUI (`python -m web.server`, typically `127.0.0.1:8088`) and the optional
+HTTP harness service (`uvicorn aiar.harness.service:app --port 8765`) are not
+presented as hardened, public-internet services. If you want to reach AIAR from
+another machine, keep it behind an additional security layer you control, such as:
+
+- a private VPN / mesh network like [Tailscale](https://tailscale.com/)
+- SSH port forwarding / tunneling
+- a private firewall or reverse proxy on a trusted network
+
+If you bind AIAR to `0.0.0.0`, do so only when you have already put those network
+controls in place.
+
 ## ⚡ Quick start: hand this to your AI
 
 New here? Don't read the docs — **copy the block below and paste it into any
@@ -17,6 +32,13 @@ served locally by Ollama. The full loop is: ingest my docs → retrieve →
 answer with Qwen (grounded) → judge the answer 1–10 with a reason → let me
 correct it → "reground" so the next answer is fixed. License is Apache-2.0; do
 not change the project's code or behavior — only set it up and run it.
+
+Important security constraint: AIAR is local-first and should not be exposed
+directly to the public internet by default. Keep the watcher GUI and optional
+HTTP harness bound to loopback unless I explicitly choose otherwise. If I want
+remote access, put it behind an additional security layer I trust, such as
+Tailscale, another private VPN, SSH port forwarding, or equivalent private
+network controls. If you mention binding to `0.0.0.0`, include that warning.
 
 Drive the whole setup for me. The authoritative steps live in PLAYBOOK.md in the
 repo — follow it. Work step by step, run the real commands, and after EACH step
@@ -123,7 +145,9 @@ exact names) — AIAR is entirely environment-driven.
 13. Do I also want the optional HTTP harness service (FastAPI)? — (recommended:
     NO for now; the CLI + GUI need none of it. If yes, also
     `pip install -r requirements-service.txt` and run
-    `uvicorn aiar.harness.service:app --port 8765`.)
+    `uvicorn aiar.harness.service:app --port 8765`.) If I want to reach it from
+    another machine, recommend keeping it behind Tailscale, another VPN, SSH
+    port forwarding, or equivalent trusted-network controls.
 Also note: the store persists at `~/.aiar` (AIAR_DB_PATH / AIAR_BASE_DIR); to
 reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
 `Remove-Item -Recurse -Force $HOME\.aiar`).
@@ -134,7 +158,9 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
   Detect mine and use the matching commands throughout (venv activation, paths,
   reset). On a HEADLESS Ubuntu server there's no browser for the GUI — either
   SSH-forward the GUI port (`ssh -L 8088:127.0.0.1:8088 me@server`) or set
-  `AIAR_WEB_HOST=0.0.0.0` behind a firewall/tunnel; the CLI needs no GUI.
+  `AIAR_WEB_HOST=0.0.0.0` only behind a trusted security layer such as
+  Tailscale, another VPN, SSH tunneling, or a private firewall/reverse proxy;
+  the CLI needs no GUI.
 - Python is 3.10–3.14. On newer active versions, the RAG stack may need to
   build `chroma-hnswlib` from source on some platforms if a wheel is
   unavailable there. Run `python3 --version` (Windows: `py --version`) and

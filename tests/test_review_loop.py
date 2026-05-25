@@ -30,7 +30,8 @@ def test_answer_prompt_uses_captured_call_id(monkeypatch):
         return ("answer text", 7)
 
     monkeypatch.setattr(pipeline, "call_ollama", fake_call)
-    monkeypatch.setattr(retriever, "get_context", lambda *args, **kwargs: "")
+    monkeypatch.setattr(retriever, "get_context",
+                        lambda *args, **kwargs: "--- Knowledge ---\n[chunk 1]\nctx")
 
     result = pipeline.answer_prompt("test prompt", judge=False)
     assert result["call_id"] == "call-123"

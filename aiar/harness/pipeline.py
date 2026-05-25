@@ -26,9 +26,9 @@ ANSWER_SYSTEM_PROMPT = (
     "You are a precise assistant. You may be given a Knowledge block retrieved "
     "from a document corpus, then a question. Treat the Knowledge block as the "
     "authoritative source: prefer it over your own memory and do NOT invent "
-    "facts. If the Knowledge block does not cover the question, answer from "
-    "general knowledge but say which parts you are unsure of. Answer concisely "
-    "in plain prose."
+    "facts. If the provided materials do not contain enough information to "
+    "answer confidently, say so plainly instead of answering from general "
+    "knowledge. Answer concisely in plain prose."
 )
 
 ANSWER_OPTIONS = {"num_predict": 600, "num_ctx": 4096}
@@ -158,6 +158,58 @@ def answer_prompt(
     do_reground = reinjection_enabled() if reground is None else bool(reground)
     ground_block = (grounding_block(prompt, force=force_reground, instance=instance)
                     if do_reground else "")
+
+    if rag and not retrieved and not context and not ground_block:
+        answer = ("I don't have enough evidence in the available knowledge base "
+                  "to answer that confidently.")
+        verdict_dict = None
+        if judge:
+            from aiar.eval.judge import judge_answer
+            verdict_dict = judge_answer(prompt, answer, "").to_dict()
+        if instance == "none":
+            resolved_instance = "none"
+        elif instance:
+            resolved_instance = instance
+        else:
+            try:
+                from aiar.rag import store as _store
+                resolved_instance = _store.active_instance()
+            except Exception:
+                resolved_instance = "default"
+        try:
+            from aiar.llm import active_model as _active_model
+            resolved_model = model if model is not None else _active_model()
+        except Exception:
+            resolved_model = model
+        if system is not None:
+            system_source = "override"
+        elif _active_system_prompt:
+            system_source = "active"
+        else:
+            system_source = "default"
+        try:
+            from aiar.rag import settings as rag_settings
+            retrieval_cfg = rag_settings.effective()
+        except Exception:  # pragma: no cover - defensive
+            retrieval_cfg = {}
+        if top_k is not None:
+            retrieval_cfg["top_k"] = top_k
+        retrieval_cfg["rag"] = bool(rag)
+        return {
+            "answer": answer,
+            "reasoning": None,
+            "verdict": verdict_dict,
+            "grounded": False,
+            "rag_enabled": rag,
+            "reground_applied": False,
+            "context_used": False,
+            "latency_ms": 0,
+            "call_id": None,
+            "instance": resolved_instance,
+            "model": resolved_model,
+            "system_source": system_source,
+            "retrieval": retrieval_cfg,
+        }
 
     # 3. Build the answer prompt.
     parts = []

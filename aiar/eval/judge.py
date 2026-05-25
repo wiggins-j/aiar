@@ -125,13 +125,13 @@ def judge_answer(
         )
     except OllamaError as exc:
         logger.warning("judge_answer: LLM call failed: %s", exc)
-        return Verdict(rating="bad", reason=f"judge could not run: {exc}",
+        return Verdict(rating="partial", reason=f"judge could not run: {exc}",
                        failure_tags=["judge_error"], confidence="low")
 
     obj = _extract_verdict_json(raw)
     if obj is None:
         logger.info("judge_answer: unparseable verdict: %r", (raw or "")[:200])
-        return Verdict(rating="bad", reason="judge returned no parseable JSON verdict",
+        return Verdict(rating="partial", reason="judge returned no parseable JSON verdict",
                        failure_tags=["judge_unparseable"], confidence="low")
 
     return Verdict.from_dict(obj)
