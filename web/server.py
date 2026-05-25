@@ -17,6 +17,7 @@ JSON API:
     POST /api/evaluation/verdict {call_id, score, correction}  (score + reground)
     GET  /api/models             ;  POST /api/models/active {model}
     GET  /api/rag/instances      ;  POST /api/rag/active {name}  ;  POST /api/rag/delete {name}
+    GET  /api/retrieval          ;  POST /api/retrieval {key,value}  ;  POST /api/retrieval/reset
     GET  /api/system-prompt      ;  POST /api/system-prompt {text}
     GET  /api/system-prompts     ;  POST /api/system-prompts/save {name,text}
                                  ;  POST /api/system-prompts/delete {name}
@@ -44,13 +45,16 @@ from .aggregator import (
     evaluation_queue,
     get_models,
     get_rag_instances,
+    get_retrieval_settings,
     get_system_prompt,
     iso_now,
     list_system_prompts,
     recent_activity,
+    reset_retrieval_settings,
     save_system_prompt_preset,
     set_active_model,
     set_active_rag,
+    set_retrieval_setting,
     set_system_prompt,
     simulate_prompt,
     submit_verdict,
@@ -116,6 +120,9 @@ class WatcherHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/rag/instances":
             self._serve_json(HTTPStatus.OK, get_rag_instances())
+            return
+        if path == "/api/retrieval":
+            self._serve_json(HTTPStatus.OK, get_retrieval_settings())
             return
         if path == "/api/system-prompt":
             self._serve_json(HTTPStatus.OK, get_system_prompt())
@@ -203,6 +210,15 @@ class WatcherHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/rag/delete":
             self._respond_result(delete_rag_instance(str((body or {}).get("name") or "")))
+            return
+
+        if parsed.path == "/api/retrieval":
+            self._respond_result(set_retrieval_setting(
+                str((body or {}).get("key") or ""), (body or {}).get("value")))
+            return
+
+        if parsed.path == "/api/retrieval/reset":
+            self._respond_result(reset_retrieval_settings())
             return
 
         if parsed.path == "/api/system-prompt":

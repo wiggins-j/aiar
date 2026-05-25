@@ -58,6 +58,24 @@ def test_clear_recent_activity(tmp_path, monkeypatch):
     assert observer.read_recent(50) == []
 
 
+def test_answer_prompt_includes_retrieval_block(monkeypatch):
+    """answer_prompt reports the retrieval features that were in effect."""
+    from aiar.harness import pipeline
+    from aiar.rag import retriever, settings as rs
+    rs.reset()
+    monkeypatch.setattr(pipeline, "call_ollama", lambda s, u, **k: ("ans", 5))
+    monkeypatch.setattr(retriever, "get_context", lambda *a, **k: "")
+    rs.set_override("hybrid", True)
+    try:
+        res = pipeline.answer_prompt("q", rag=True, judge=False, top_k=4)
+        r = res["retrieval"]
+        assert r["rag"] is True and r["top_k"] == 4 and r["hybrid"] is True
+        for k in ("rerank", "rewrite_mode", "grounding_reinjection"):
+            assert k in r
+    finally:
+        rs.reset()
+
+
 def test_simulate_forwards_judge_toggle(monkeypatch):
     """The Simulate page's LLM-judging toggle flows through to answer_prompt:
     judge=False skips the LLM-as-judge (no verdict)."""

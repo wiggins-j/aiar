@@ -129,6 +129,10 @@ terms), ⛔ blocked/auth — do not bypass, 🗣️ unofficial (label as such).
 
 ## Tier 4 — Reviews, reliability, owner satisfaction (licensed)
 
+> These commercial sources are named only to show **how to respect licensing** — do
+> NOT ingest their content without a license. The core KB is built from the open
+> government/official sources in Tiers 1–3; these are optional, license-gated extras.
+
 | Source | Use it for | Caution |
 |---|---|---|
 | `consumerreports.org` | Reliability, owner satisfaction, road tests | 🔒 Subscription/licensing — do not scrape paid content |

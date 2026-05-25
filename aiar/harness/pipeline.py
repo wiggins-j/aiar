@@ -118,6 +118,13 @@ def answer_prompt(
           "context_used": bool,
           "latency_ms": int,
           "call_id": str | None,          # observer call_id of the ANSWER call
+          "retrieval": {...},             # retrieval features in effect for this
+                                          # call (hybrid/rerank/rewrite_mode/top_k/
+                                          # fetch_k/grounding_reinjection/rerank_model
+                                          # + rag). NOTE: the retrieval pipeline runs
+                                          # for the JUDGE regardless of rag; the
+                                          # ``rag``/``grounded`` fields say whether
+                                          # the ANSWERER was grounded.
         }
 
     ``rag=False`` blinds the ANSWERER (no retrieved context injected) for a true
@@ -226,6 +233,17 @@ def answer_prompt(
     except Exception:
         resolved_model = model
 
+    # Snapshot the retrieval features that were in effect for this answer, so the
+    # GUI/metadata shows exactly which frameworks ran (A/B with vs without).
+    try:
+        from aiar.rag import settings as rag_settings
+        retrieval_cfg = rag_settings.effective()
+    except Exception:  # pragma: no cover - defensive
+        retrieval_cfg = {}
+    if top_k is not None:
+        retrieval_cfg["top_k"] = top_k
+    retrieval_cfg["rag"] = bool(rag)
+
     return {
         "answer": answer,
         "reasoning": reasoning,
@@ -239,4 +257,5 @@ def answer_prompt(
         "instance": resolved_instance,
         "model": resolved_model,
         "system_source": system_source,
+        "retrieval": retrieval_cfg,
     }

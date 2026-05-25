@@ -48,3 +48,10 @@ aiar.harness` and `python -m aiar.eval.runner`. The only browser-optional step �
 recording a grounding correction — also has a `curl` path via the watcher API (see
 [`grounding-reinjection.md`](grounding-reinjection.md)), so an SSH-only user can do
 everything without a GUI.
+
+**GUI note.** You can also toggle every feature here **live in the watcher** —
+Settings → **Retrieval Features** (hybrid, reranker, query-rewrite/HyDE, grounding,
+top-k, fetch-k), with a *Reset to defaults*, no restart. Each answer's metadata
+reports which features were active (badges on the Simulate page), so A/B with vs
+without is one click + a re-run. Env vars remain the durable default; live toggles
+revert on restart.

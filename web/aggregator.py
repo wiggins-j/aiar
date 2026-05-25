@@ -243,6 +243,41 @@ def delete_rag_instance(name: str) -> Dict[str, Any]:
                      "active_display_name": active_display_name}}
 
 
+def get_retrieval_settings() -> Dict[str, Any]:
+    """Return the effective retrieval-feature config, where each value comes from
+    (override/env/default), and the built-in defaults — for the Settings card."""
+    from aiar.rag import settings as rag_settings
+    return {
+        "config": rag_settings.effective(),
+        "sources": rag_settings.sources(),
+        "defaults": rag_settings.defaults(),
+    }
+
+
+def set_retrieval_setting(key: str, value: Any) -> Dict[str, Any]:
+    """Set one live retrieval-feature override (no restart). Validates key/value."""
+    from aiar.rag import settings as rag_settings
+    key = (key or "").strip()
+    if key not in rag_settings.keys():
+        return {"ok": False, "status": 400, "error": "unknown_setting", "data": key}
+    try:
+        rag_settings.set_override(key, value)
+    except ValueError as exc:
+        return {"ok": False, "status": 422, "error": "invalid_value", "data": str(exc)}
+    return {"ok": True, "status": 200,
+            "data": {"config": rag_settings.effective(),
+                     "sources": rag_settings.sources(), "set": key}}
+
+
+def reset_retrieval_settings() -> Dict[str, Any]:
+    """Clear all live retrieval-feature overrides (revert to env/defaults)."""
+    from aiar.rag import settings as rag_settings
+    rag_settings.reset()
+    return {"ok": True, "status": 200,
+            "data": {"config": rag_settings.effective(),
+                     "sources": rag_settings.sources()}}
+
+
 def get_system_prompt() -> Dict[str, Any]:
     """Return the active harness system prompt (+ whether it's an override or
     the built-in default)."""

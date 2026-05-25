@@ -309,6 +309,61 @@ async function deleteSystemPreset() {
   }
 }
 
+// ---- Retrieval features card ----------------------------------------------
+
+async function loadRetrieval() {
+  const msg = $("rf-message");
+  try {
+    const resp = await fetch("/api/retrieval", { cache: "no-store" });
+    const data = await resp.json();
+    const c = data.config || {};
+    $("rf-hybrid").checked = !!c.hybrid;
+    $("rf-rerank").checked = !!c.rerank;
+    $("rf-grounding").checked = !!c.grounding_reinjection;
+    $("rf-rewrite").value = c.rewrite_mode || "off";
+    $("rf-topk").value = c.top_k ?? 3;
+    $("rf-fetchk").value = c.fetch_k ?? 20;
+    const overridden = Object.entries(data.sources || {})
+      .filter(([, s]) => s === "override").map(([k]) => k);
+    msg.textContent = overridden.length
+      ? `Live overrides: ${escapeHtml(overridden.join(", "))} (restart reverts to env/defaults).`
+      : "Using env / built-in defaults.";
+  } catch (err) {
+    msg.textContent = "Failed to load retrieval settings: " + err;
+  }
+}
+
+async function setRetrieval(key, value) {
+  try {
+    const resp = await fetch("/api/retrieval", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || data.error || "failed");
+    await loadRetrieval();
+  } catch (err) {
+    $("rf-message").textContent = `Failed to set ${escapeHtml(key)}: ` + err;
+  }
+}
+
+async function resetRetrieval() {
+  const btn = $("rf-reset");
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/retrieval/reset", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    });
+    if (!resp.ok) throw new Error("reset_failed");
+    await loadRetrieval();
+    $("rf-message").textContent = "Reset to env / built-in defaults.";
+  } catch (err) {
+    $("rf-message").textContent = "Failed: " + err;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ---- shared --------------------------------------------------------------
 
 let _activeModel = null;
@@ -331,8 +386,16 @@ $("reset-system").addEventListener("click", resetSystemPrompt);
 $("save-preset").addEventListener("click", saveSystemPreset);
 $("delete-preset").addEventListener("click", deleteSystemPreset);
 $("system-preset-select").addEventListener("change", onPresetChange);
+$("rf-hybrid").addEventListener("change", (e) => setRetrieval("hybrid", e.target.checked));
+$("rf-rerank").addEventListener("change", (e) => setRetrieval("rerank", e.target.checked));
+$("rf-grounding").addEventListener("change", (e) => setRetrieval("grounding_reinjection", e.target.checked));
+$("rf-rewrite").addEventListener("change", (e) => setRetrieval("rewrite_mode", e.target.value));
+$("rf-topk").addEventListener("change", (e) => setRetrieval("top_k", Number(e.target.value)));
+$("rf-fetchk").addEventListener("change", (e) => setRetrieval("fetch_k", Number(e.target.value)));
+$("rf-reset").addEventListener("click", resetRetrieval);
 
 loadModels();
 loadRag();
 loadSystemPrompt();
 loadSystemPresets();
+loadRetrieval();

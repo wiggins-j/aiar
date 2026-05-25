@@ -24,11 +24,10 @@ _ENV_GROUNDING_REINJECTION = "GROUNDING_REINJECTION_ENABLED"
 
 
 def reinjection_enabled() -> bool:
-    """``GROUNDING_REINJECTION_ENABLED`` — default FALSE."""
-    raw = os.environ.get(_ENV_GROUNDING_REINJECTION)
-    if raw is None or raw == "":
-        return False
-    return raw.strip().lower() in ("1", "true", "yes", "on")
+    """Effective grounding-reinjection flag: live override ->
+    ``GROUNDING_REINJECTION_ENABLED`` -> False."""
+    from aiar.rag import settings as rag_settings  # local import: no import cycle
+    return bool(rag_settings.get("grounding_reinjection"))
 
 
 def grounding_block(prompt: str, *, force: bool = False,

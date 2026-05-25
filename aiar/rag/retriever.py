@@ -22,6 +22,7 @@ import os
 from typing import List
 
 from aiar.rag import store
+from aiar.rag import settings as rag_settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +43,13 @@ def _flag(name: str) -> bool:
 
 
 def hybrid_enabled() -> bool:
-    """``RAG_HYBRID_ENABLED`` — default FALSE."""
-    return _flag("RAG_HYBRID_ENABLED")
+    """Effective hybrid flag (live override -> ``RAG_HYBRID_ENABLED`` -> False)."""
+    return bool(rag_settings.get("hybrid"))
 
 
 def rerank_enabled() -> bool:
-    """``RAG_RERANK_ENABLED`` — default FALSE."""
-    return _flag("RAG_RERANK_ENABLED")
+    """Effective rerank flag (live override -> ``RAG_RERANK_ENABLED`` -> False)."""
+    return bool(rag_settings.get("rerank"))
 
 
 # "No RAG" sentinel: selecting this instance skips retrieval entirely (mirrors
@@ -79,7 +80,7 @@ def _retrieve_texts(query: str, k: int, *, rerank: bool, where: "dict | None" = 
     is byte-identical to the plain vector path."""
     if not rerank and not hybrid_enabled() and where is None:
         return store.query(query, n_results=k, instance=instance)
-    n = _env_int("RAG_FETCH_K", 20) if rerank else k
+    n = int(rag_settings.get("fetch_k")) if rerank else k
     cands = _retrieve_candidates(query, max(n, k), where=where, instance=instance)
     if rerank:
         from aiar.rag import reranker
@@ -121,7 +122,7 @@ def get_context(query: str, *, instance: "str | None" = None,
             pass
     if not query or not query.strip():
         return ""
-    k = top_k if top_k is not None else _env_int("RAG_TOP_K", 3)
+    k = top_k if top_k is not None else int(rag_settings.get("top_k"))
     do_rerank = rerank_enabled() if rerank is None else rerank
 
     if rewrite:

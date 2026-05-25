@@ -37,7 +37,8 @@ _HYDE_SYS = (
 
 
 def _mode() -> str:
-    return (os.environ.get("RAG_QUERY_REWRITE_MODE", "off") or "off").strip().lower()
+    from aiar.rag import settings as rag_settings  # local import: no import cycle
+    return str(rag_settings.get("rewrite_mode") or "off").strip().lower()
 
 
 def _timeout_s() -> float:

@@ -9,6 +9,25 @@ function ratingBadge(rating) {
   return { cls, text: rating || "?" };
 }
 
+// Show which retrieval frameworks were active for this answer (A/B at a glance).
+function renderRetrievalBadges(r) {
+  const el = $("retrieval-badges");
+  if (!el) return;
+  if (!r) { el.innerHTML = ""; return; }
+  const labels = [];
+  if (r.rag) {
+    if (r.hybrid) labels.push("Hybrid");
+    if (r.rerank) labels.push("Rerank");
+    if (r.rewrite_mode && r.rewrite_mode !== "off") {
+      labels.push(r.rewrite_mode === "hyde" ? "HyDE" : "Rewrite");
+    }
+    labels.push("top-k " + Number(r.top_k || 0));
+  }
+  if (r.grounding_reinjection) labels.push("Grounding");
+  el.innerHTML = labels
+    .map((b) => `<span class="badge badge-neutral">${b}</span>`).join(" ");
+}
+
 async function runPrompt() {
   const prompt = $("prompt").value.trim();
   if (!prompt) { $("status").textContent = "Enter a prompt first."; return; }
@@ -79,6 +98,8 @@ function renderResult(data) {
   } else {
     rgB.classList.add("hidden");
   }
+
+  renderRetrievalBadges(data.retrieval);
 
   $("latency").textContent = (data.latency_ms || 0) + " ms · call " + (lastCallId || "n/a");
   $("mark").disabled = !lastCallId;

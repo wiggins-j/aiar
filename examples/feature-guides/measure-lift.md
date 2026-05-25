@@ -36,11 +36,13 @@ Repeat for `RAG_HYBRID_ENABLED`, `RAG_QUERY_REWRITE_MODE` (off/rewrite/hyde), an
 
 ## In the GUI
 
-For a quick qualitative check without a cases file: on the **Simulate** page run the
-same prompt with "Use RAG" on vs off (or switch the active instance to **No RAG** in
-**Settings**), and watch the judge verdict and the retrieved context. The
-**Activity** page shows the exact query/context used, which is handy when testing
-query-rewrite/HyDE.
+For a quick qualitative check without a cases file: toggle a feature in **Settings →
+Retrieval Features** (hybrid, reranker, HyDE, grounding, top-k, fetch-k — live, no
+restart), then re-run the same prompt on **Simulate**. Each answer shows **badges**
+for the features that were active, so you can A/B with vs without at a glance and
+watch the judge verdict move. You can also flip "Use RAG" off (or switch to **No
+RAG**) for the blind baseline. The **Activity** page shows the exact query/context
+used, which is handy when testing query-rewrite/HyDE.
 
 ## Rule of thumb
 

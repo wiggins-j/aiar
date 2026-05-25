@@ -225,9 +225,12 @@ RAG, Reground, Show Reasoning, and LLM Judging), Activity (every logged LLM call
 mark any one, or Clear Recent Activity), Evaluation Queue (score 1–10 + correct),
 and Settings (switch the active Qwen model; switch the active RAG instance —
 including a first-class "No RAG" option, with the bundled Acme demo shown as
-**Example RAG** instead of raw `default` — delete a RAG instance; and edit the
-harness system prompt, with named save/load presets). Tell me it's serving and what
-each page does.
+**Example RAG** instead of raw `default` — delete a RAG instance; toggle the
+**Retrieval Features** live (hybrid, reranker, query-rewrite/HyDE, grounding,
+top-k, fetch-k — no restart, with a Reset to defaults); and edit the harness system
+prompt, with named save/load presets). Each answer's metadata reports which
+retrieval features were active (shown as badges on Simulate) so you can A/B with and
+without. Tell me it's serving and what each page does.
 
 If I'm on a headless Ubuntu LTS box or just don't want a browser, I still want
 the non-GUI path covered. The core loop is already CLI-first (`aiar.rag.ingest`,
@@ -244,6 +247,7 @@ run `python -m web.server` and use its local JSON API instead:
 - `POST /api/evaluation/clear`
 - `GET /api/models` and `POST /api/models/active`
 - `GET /api/rag/instances`, `POST /api/rag/active`, and `POST /api/rag/delete`
+- `GET /api/retrieval`, `POST /api/retrieval` `{key,value}`, `POST /api/retrieval/reset`  (live retrieval-feature toggles)
 - `GET /api/system-prompt` and `POST /api/system-prompt`
 - `GET /api/system-prompts`, `POST /api/system-prompts/save`, `POST /api/system-prompts/delete`  (named presets)
 Be explicit that there is no separate first-class CLI for Activity / queue /
@@ -285,7 +289,9 @@ commands I would rerun next for:
 === NEXT STEPS: Explore retrieval-quality methods ===
 After the loop works, give me a short **Next Steps** menu: the OPTIONAL quality
 methods I can turn on and TUNE to make retrieval better, and invite me to explore
-them. Each has a runnable guide in `examples/feature-guides/`:
+them. Point me first at the ROI-ranked roadmap, then the per-method guides — all in
+`examples/feature-guides/`:
+- ROADMAP (read first)               -> examples/feature-guides/improving-rag.md
 - Hybrid retrieval (vector + BM25)   -> examples/feature-guides/hybrid-retrieval.md
 - Cross-encoder reranker             -> examples/feature-guides/reranker.md
 - Query rewrite / HyDE               -> examples/feature-guides/query-rewrite-hyde.md
