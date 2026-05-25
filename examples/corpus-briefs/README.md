@@ -7,7 +7,7 @@ README/PLAYBOOK: **"Building your RAG corpus: two ways."**)
 
 | File | What it is |
 |---|---|
-| [`tesla-manual-expert-collection-brief.md`](tesla-manual-expert-collection-brief.md) | A full **worked example** — a safety-first brief for a Tesla owner-manual assistant (official Tesla + NHTSA sources, safety classes, metadata schema, eval questions). Copy it as a starting point. |
+| [`tesla-manual-expert-collection-brief.md`](tesla-manual-expert-collection-brief.md) | A full **worked example** — a safety-first brief for a Tesla safety & recall assistant sourced from **NHTSA open government data** (recalls, investigations, complaints, safety ratings; safety classes, metadata schema, eval questions). Tesla's own sites block automated agents, so this brief uses NHTSA only. Copy it as a starting point. |
 | [`collection-brief-builder-prompt.md`](collection-brief-builder-prompt.md) | A **template prompt** — paste it into any AI and it interviews you, then writes a brief like the Tesla one for *your* domain. |
 
 ## Workflow

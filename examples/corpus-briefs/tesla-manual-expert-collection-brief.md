@@ -5,12 +5,10 @@
 > normalizes a corpus *for* you, instead of you gathering documents by hand.
 >
 > **How it maps to AIAR:** the AI's job is **find → collect → normalize into a
-> folder** of clean `.txt`/`.md`/`.json` files (one topic/procedure per file, with
-> the metadata below written as front-matter inside each file). **AIAR does the
+> folder** of clean `.txt`/`.md`/`.json` files (one record per file, with the
+> metadata below written as front-matter inside each file). **AIAR does the
 > chunk + embed + index** when you then run
-> `python -m aiar.rag.ingest <that folder> --instance <name>`. So treat the
-> "chunking / indexing / retrieval-strategy" sections below as guidance for how to
-> *split files* and *tag content* — AIAR performs the actual vectorization.
+> `python -m aiar.rag.ingest <that folder> --instance <name>`.
 >
 > To generate your own brief like this one, hand
 > [`collection-brief-builder-prompt.md`](collection-brief-builder-prompt.md) to your
@@ -19,665 +17,237 @@
 
 ---
 
-# Tesla Manual Expert RAG Collection Brief
+# Tesla Safety & Recall Expert — NHTSA-Sourced
 
-Created: 2026-05-24
-Project: **Tesla Manual Expert — Owner-Safe Mode**
+Created: 2026-05-24 · Revised: 2026-05-25
+Project: **Tesla Safety & Recall Expert — NHTSA-Sourced**
 Primary vehicle scope: **Tesla Model 3 and Tesla Model Y**
-Secondary vehicle scope: Model S, Model X, Cybertruck, Roadster, Tesla Energy products only after v1 is stable.
+Secondary scope: Model S, Model X, Cybertruck (after v1 is stable).
+
+> **Why NHTSA-only?** Tesla's own sites are not usable by an automated collector:
+> `www.tesla.com` returns **HTTP 403** to programmatic HTTP fetchers (owner
+> manuals, support pages, and PDFs alike), and `service.tesla.com` is behind
+> authentication. This brief therefore sources **only** the U.S. government's open
+> NHTSA vehicle-safety data, which is authoritative, free, and designed for
+> programmatic access. The trade-off: this corpus covers **recalls, investigations,
+> complaints, manufacturer communications, safety ratings, and emergency-response
+> guides** — it does **not** cover owner-manual operation or DIY maintenance steps
+> (those live only on the blocked Tesla domains). If you need owner-manual content,
+> collect it with a browser-capable agent or by manual download into a *separate*
+> instance; do not mix it with this official NHTSA record set.
 
 ---
 
-# AI Agent Prompt: Tesla Documentation RAG Collector
+# AI Agent Prompt: Tesla NHTSA Safety-Record Collector
 
-You are an AI research and scraping agent responsible for building a high-quality Retrieval-Augmented Generation knowledge base for a local model called **Tesla Manual Expert — Owner-Safe Mode**.
+You are an AI research agent building a high-quality Retrieval-Augmented Generation
+knowledge base for a local model called **Tesla Safety & Recall Expert**.
 
-Your job is to find, collect, normalize, chunk, and index official Tesla and official U.S. government vehicle-safety documentation so a small local model (any Qwen served by Ollama, e.g. `qwen2.5:7b`) can answer Tesla product-support questions with precise citations.
+Your job is to find, collect, and normalize **official U.S. government NHTSA**
+vehicle-safety records so a small local model (any Qwen served by Ollama, e.g.
+`qwen2.5:7b`) can answer Tesla safety, recall, and complaint questions with precise
+citations.
 
 ## Mission
 
-Build a RAG corpus that allows the model to answer questions about:
+Build a RAG corpus that lets the model answer questions about:
 
-- Tesla Model 3 and Model Y owner operation
-- alerts, warnings, touchscreen messages, and common troubleshooting
-- safe owner-level maintenance
-- charging, towing, roadside, and transport guidance
-- Service Mode concepts and diagnostic panels
-- service-manual procedures and component references
-- electrical references, connector references, schematics, and pinouts
-- collision repair references
-- emergency response guidance and rescue sheets
-- recalls, service bulletins, investigations, and NHTSA records
+- Tesla recalls (campaign numbers, affected populations, conditions, remedies)
+- whether a recall is remedied by an over-the-air (OTA) update or a service visit
+- NHTSA defect investigations (openings, closings, scope)
+- manufacturer communications and technical service bulletins (TSBs) on file with NHTSA
+- owner-reported complaints (clearly labeled as non-authoritative)
+- NCAP safety ratings (crash-test / rollover) where available
+- emergency-response guidance for Tesla vehicles (NHTSA-hosted)
+- how an owner should act on a possible recall (including VIN lookup)
 
 ## Hard Rules
 
-1. Use official sources first.
-2. Respect robots.txt, site terms, rate limits, and access controls.
-3. Do not bypass authentication, paywalls, account requirements, CAPTCHAs, or technical access restrictions.
-4. Do not scrape private owner data, VIN-specific data, account data, or service-center records.
-5. Do not store user VINs, license plates, addresses, names, phone numbers, or Tesla account details.
-6. Keep exact source URLs, crawl timestamps, document titles, section headers, and content hashes.
-7. Preserve warning labels, cautions, torque specs, model-year ranges, software-version references, region references, and document revision notes.
-8. Treat high-voltage, SRS/airbag, collision-structural, battery, charging-system, steering, braking, and driver-assistance procedures as safety-sensitive.
-9. The resulting assistant must explain, cite, and escalate when appropriate. It must not encourage untrained users to perform dangerous service procedures.
-10. If documentation conflicts, prefer the most specific and most recent official source for the user's stated vehicle model, model year, region, and software version.
+1. Use official NHTSA sources only (the domains listed below).
+2. Respect robots.txt, site terms, rate limits, and API usage norms.
+3. Do not bypass authentication, paywalls, CAPTCHAs, or technical access controls.
+   (This is why Tesla-owned domains are excluded — see "Why NHTSA-only?" above.)
+4. Do not scrape private owner data; do not store VINs, license plates, names,
+   addresses, phone numbers, or any partial VIN that may appear in complaint records.
+5. Keep exact source URLs, retrieval timestamps, record IDs, and content hashes.
+6. Preserve campaign numbers, component categories, model-year ranges, dates,
+   consequence and remedy text, and revision notes verbatim.
+7. Treat high-voltage, SRS/airbag, battery, braking, steering, and driver-assistance
+   topics as safety-sensitive.
+8. Label every owner-reported complaint as non-authoritative; prioritize recalls,
+   investigations, and manufacturer communications over complaints.
+9. The assistant must explain, cite, and escalate appropriately. It must not invent
+   recalls, campaign numbers, torque specs, or repair procedures, and must not give
+   DIY instructions for high-voltage, airbag, or structural work.
+10. If records conflict, prefer the most specific and most recent official record for
+    the user's stated model, model year, and region.
 
 ## Desired Output Corpus
 
-The final corpus should be indexed as retrievable chunks with rich metadata, not as giant unstructured PDFs. Each chunk should be small enough to retrieve accurately but large enough to preserve procedural context.
+Index as retrievable records with rich metadata — **one record per file**:
 
-Recommended chunking:
-
-- Owner manual chunks: 500-900 tokens
-- Service manual procedure chunks: one procedure or major procedure section per chunk
-- Warning/caution chunks: preserve with the procedure they govern and also index separately
-- Tables: convert to structured Markdown or JSON-like records
-- Error, DTC, and alert records: one alert or code per record when possible
-- Recall, TSB, and investigation records: one recall, campaign, bulletin, or investigation per record
-- Electrical connector records: one connector, pinout, or schematic reference per record
+- one recall campaign per file
+- one investigation (opening or closing resume) per file
+- one manufacturer communication / TSB per file
+- one complaint per file (or a small grouped summary clearly marked owner-reported)
+- one safety-ratings record per model/year/variant
+- one emergency-response guide per model/year
 
 ---
 
-# Allowed Base Domains
+# Allowed Sources (NHTSA only)
 
-Only crawl from these base domains unless explicitly approved later.
+Only collect from these official U.S. government domains.
 
-| Domain | Purpose | Trust Level |
+| Source | Purpose | Trust |
 |---|---|---|
-| `https://www.tesla.com` | Owner manuals, support pages, DIY guides, recall pages, first-responder pages, emergency PDFs, video guide pages | Official Tesla |
-| `https://service.tesla.com` | Service manuals, electrical references, collision repair docs, Service Mode docs | Official Tesla |
-| `https://www.nhtsa.gov` | Recalls, investigations, complaints, manufacturer communications, emergency-response guide database, vehicle safety pages | Official U.S. government |
-| `https://static.nhtsa.gov` | Official NHTSA-hosted PDFs, TSBs, recall reports, manufacturer communications, investigation PDFs | Official U.S. government |
-| `https://vinrcl.safercar.gov` | NHTSA VIN recall lookup information and support pages | Official U.S. government / NHTSA |
+| `https://api.nhtsa.gov` | Open JSON API: recalls, complaints, safety ratings (verified working) | Official U.S. government |
+| `https://www.nhtsa.gov` | Safety-issue search, recalls, investigations, emergency-response-guide pages | Official U.S. government |
+| `https://static.nhtsa.gov` | NHTSA-hosted PDFs: Part 573 recall reports, TSBs, investigation PDFs, ERGs | Official U.S. government |
+| `https://vinrcl.safercar.gov` | NHTSA VIN recall lookup info and support | Official U.S. government / NHTSA |
 
-## Do Not Include in v1
+## Do Not Include
 
-Do not crawl or index these sources in v1:
-
-- Reddit
-- Tesla Motors Club
-- YouTube comments or unofficial transcripts
-- Facebook, X, Instagram, TikTok
-- random blog posts
-- repair-shop marketing pages
-- third-party PDF mirrors
+- **`tesla.com` / `service.tesla.com`** — blocked (403) or auth-gated for automated
+  agents; out of scope for this brief. (Collect via a browser agent or manual
+  download into a *separate* instance if you need owner-manual content.)
+- Reddit, Tesla Motors Club, YouTube, Facebook/X/Instagram/TikTok
+- random blogs, repair-shop marketing pages, third-party PDF mirrors
 - leaked or unauthorized service documents
-- scraped copies of Tesla docs hosted on non-Tesla domains
-
-These may be useful later as a separate **community-symptom index**, but they must not be mixed with official documentation.
 
 ---
 
-# Seed URLs
+# Seed Endpoints (verified working)
 
-Use these as starting points. Expand through same-domain internal links only.
+Use the open NHTSA API. Iterate over models and model years. Examples:
 
-## Tesla Owner Manuals
+```text
+# Recalls for a model + year (returns campaign number, component, summary,
+# consequence, remedy, dates):
+https://api.nhtsa.gov/recalls/recallsByVehicle?make=tesla&model=model 3&modelYear=2023
+https://api.nhtsa.gov/recalls/recallsByVehicle?make=tesla&model=model y&modelYear=2024
 
-Primary seeds:
+# Owner-reported complaints for a model + year (label as non-authoritative):
+https://api.nhtsa.gov/complaints/complaintsByVehicle?make=tesla&model=model 3&modelYear=2023
 
-- `https://www.tesla.com/ownersmanual/`
-- `https://www.tesla.com/ownersmanual/model3/en_us/`
-- `https://www.tesla.com/ownersmanual/modely/en_us/`
-- `https://www.tesla.com/ownersmanual/index-model-3-2017.html`
-- `https://www.tesla.com/ownersmanual/index-model-3.html`
-- `https://www.tesla.com/ownersmanual/index-model-y-2020.html`
-- `https://www.tesla.com/ownersmanual/index-model-y.html`
-
-Target owner-manual coverage:
-
-- Model 3, 2017-2023
-- Model 3, 2024+
-- Model Y, 2020-2024
-- Model Y, 2025+
-- region-specific variants if easily available
-- manual pages that mention release notes, software-version specificity, regional applicability, and in-car manual precedence
-
-Important owner-manual sections to prioritize:
-
-- Using This Owner's Manual
-- Getting Started
-- Opening and Closing
-- Seating and Safety Restraints
-- Driving
-- Autopilot / Assisted Driving
-- Traffic-Aware Cruise Control
-- Autosteer
-- Full Self-Driving / supervised assisted-driving features, if present
-- Charging
-- Maintenance
-- Wheels and Tires
-- Cleaning
-- Cold Weather Best Practices
-- Towing and Transport
-- Roadside Assistance
-- Troubleshooting Alerts
-- Safety Information
-- Specifications
-
----
-
-## Tesla Service Portal
-
-Primary seed:
-
-- `https://www.tesla.com/support/service-portal`
-
-Purpose:
-
-Use this as a high-level source index for Tesla service resources.
-
-Target resource categories:
-
-- Do It Yourself Guides
-- Service Manuals
-- Parts Catalog references
-- Wiring Diagrams / Electrical References
-- Collision Repair
-- Maintenance information
-- Repair information
-
----
-
-## Tesla Service Manuals
-
-Primary seeds:
-
-- `https://service.tesla.com/docs/Model3/ServiceManual/en-us/index.html`
-- `https://service.tesla.com/docs/Model3/ServiceManual/2024/en-us/index.html`
-- `https://service.tesla.com/docs/ModelY/ServiceManual/en-us/`
-- `https://service.tesla.com/docs/ModelY/ServiceManual/2025/en-us/`
-
-Secondary seeds for later expansion:
-
-- `https://service.tesla.com/docs/ModelS/ServiceManual/en-us/`
-- `https://service.tesla.com/docs/ModelX/ServiceManual/en-us/`
-- `https://service.tesla.com/docs/Cybertruck/ServiceManual/en-us/`
-
-Target Model 3 / Model Y service-manual coverage:
-
-- Introduction
-- Abbreviations and symbols
-- How to use this manual
-- Best practices
-- safety precautions
-- Airbag and SRS precautions
-- high-voltage precautions
-- lifting and jacking
-- maintenance service intervals
-- Vehicle Health Check
-- firmware service
-- Diagnostic Trouble Codes
-- wheels and tires
-- brakes
-- suspension
-- steering
-- thermal system
-- body exterior
-- body interior
-- closures
-- electrical
-- low-voltage battery / LV power
-- high-voltage battery / HV system
-- drive units
-- charging system
-- torque specifications
-- remove-and-replace procedures
-
-Special handling:
-
-- Preserve all warnings and cautions.
-- Tag procedures with safety class.
-- Do not flatten steps that depend on previous conditions.
-- Extract part names, torque values, fastener types, tool references, and model-year applicability.
-
----
-
-## Tesla Electrical References / Wiring Diagrams
-
-Primary seeds:
-
-- `https://service.tesla.com/docs/Model3/ElectricalReference/`
-- `https://service.tesla.com/docs/ModelY/ElectricalReference/`
-- `https://service.tesla.com/docs/ModelY/ElectricalReference/2025/index-model-y-2025.html`
-
-Target content:
-
-- interactive schematics
-- connector reference pages
-- connector IDs
-- Tesla part numbers
-- connector manufacturer and part number
-- pin/cavity data
-- wire colors
-- wire sizes
-- wire destinations
-- production-date filters
-- factory filters
-- schematic navigation notes
-
-Metadata to capture:
-
-```yaml
-doc_type: electrical_reference
-model:
-model_year_range:
-factory:
-production_date_start:
-production_date_end:
-connector_id:
-tesla_part_number:
-connector_manufacturer:
-connector_part_number:
-wire_color:
-wire_size:
-cavity:
-destination_designator:
-destination_cavity:
-source_url:
-retrieved_at:
-content_hash:
+# Safety-ratings vehicle variants for a model + year (then resolve ratings by VehicleId):
+https://api.nhtsa.gov/SafetyRatings/modelyear/2023/make/tesla/model/model 3
+https://api.nhtsa.gov/SafetyRatings/VehicleId/<id>
 ```
 
-Special handling:
+Human-readable / PDF sources to supplement:
 
-- Electrical references are technical and safety-sensitive.
-- The final assistant should explain references but should not instruct untrained owners to probe HV circuits or modify wiring.
-
----
-
-## Tesla Service Mode
-
-Primary seeds:
-
-- `https://service.tesla.com/service-mode`
-- `https://service.tesla.com/docs/Public/ServiceMode/service_mode_user_guide.pdf`
-
-Target content:
-
-- what Service Mode is
-- supported users / intended use
-- how Service Mode behavior differs by model, year, software version, and hardware
-- safety limitations
-- diagnostic panels
-- charging panels
-- low-voltage battery information
-- high-voltage system state
-- ECU update status
-- vehicle health checks
-- thermal routines
-- camera calibration
-- software reinstall / firmware panels
-- service actions that require trained personnel
-
-Metadata to capture:
-
-```yaml
-doc_type: service_mode
-source_software_version:
-model_applicability:
-panel_name:
-function_category:
-safety_class:
-owner_safe:
-source_url:
-retrieved_at:
-content_hash:
+```text
+https://www.nhtsa.gov/recalls
+https://www.nhtsa.gov/search-safety-issues
+https://www.nhtsa.gov/resources-investigations-recalls
+https://www.nhtsa.gov/emergency-response-guides
+https://vinrcl.safercar.gov/vin/
+# Part 573 reports, TSBs, ERGs are served as PDFs under:
+https://static.nhtsa.gov
 ```
 
----
-
-## Tesla Do It Yourself Guides
-
-Primary seed:
-
-- `https://www.tesla.com/support/do-it-yourself-guides`
-
-Purpose:
-
-This is one of the highest-value and safest document sets for the assistant.
-
-Target DIY categories:
-
-- wiper blade replacement
-- cabin air filter replacement
-- washer fluid
-- tire pressure and tire care
-- wheel covers / aero covers
-- key card / phone key basics
-- charging adapter basics
-- simple resets and restarts
-- software update basics
-- owner-performable accessories
-- model-specific owner maintenance procedures
-
-Preferred chunk format:
-
-```yaml
-doc_type: diy_guide
-model:
-model_year_range:
-procedure_name:
-owner_safe: true
-tools_required:
-parts_required:
-steps:
-warnings:
-source_url:
-retrieved_at:
-content_hash:
-```
-
----
-
-## Tesla Vehicle Maintenance
-
-Primary seed:
-
-- `https://www.tesla.com/support/vehicle-maintenance`
-
-Target content:
-
-- maintenance intervals
-- brake service expectations
-- tire rotation and tire care
-- cabin air filter guidance
-- HEPA filter guidance, if applicable
-- brake fluid checks
-- A/C service guidance
-- winter care
-- traditional gas-vehicle maintenance that does not apply to Tesla vehicles
-
----
-
-## Tesla Recall Information
-
-Primary seeds:
-
-- `https://www.tesla.com/support/annual-and-recall-service`
-- `https://www.tesla.com/support/recalls`
-- `https://www.tesla.com/support/recall-battery-pack-contactor`
-
-Target content:
-
-- Tesla recall campaign pages
-- Model 3 / Model Y recall pages
-- software-update recalls
-- service-center remedy recalls
-- recall applicability statements
-- owner action guidance
-- VIN lookup instructions
-- references to NHTSA VIN Recall Search
-
-Preferred recall record format:
-
-```yaml
-doc_type: recall
-source: tesla
-recall_name:
-nhtsa_campaign_number:
-tesla_campaign_number:
-model:
-model_year_range:
-affected_population:
-condition:
-risk:
-remedy:
-owner_action:
-ota_update_possible:
-service_required:
-source_url:
-retrieved_at:
-content_hash:
-```
-
----
-
-## Tesla First Responder / Emergency Response Docs
-
-Primary seeds:
-
-- `https://www.tesla.com/firstresponders`
-- `https://www.tesla.com/firstresponders/vehicles-charging`
-
-Target documents:
-
-- Emergency Response Guides
-- Quick Response Sheets
-- Rescue Sheets
-- vehicle-specific first-responder PDFs
-- high-voltage disable procedures
-- fire, submersion, post-crash, and tow/storage emergency guidance
-- Model 3 Emergency Response Guide
-- Model Y Emergency Response Guide
-- Model S / Model X / Cybertruck emergency docs for later expansion
-
-Known Tesla-hosted PDF patterns may include:
-
-- `https://www.tesla.com/sites/default/files/downloads/Model_3_Emergency_Response_Guide_en.pdf`
-- `https://www.tesla.com/sites/default/files/downloads/2017_Model_3_Emergency_Response_Guide_en.pdf`
-- `https://www.tesla.com/sites/default/files/downloads/2016_Model_S_Emergency_Response_Guide_en.pdf`
-
-Special handling:
-
-- These documents are intended for trained first responders.
-- Tag as emergency / first-responder / high-voltage-danger.
-- The assistant should not convert responder procedures into casual owner repair instructions.
-- Emergency answers should be conservative: move away, call emergency services, avoid HV components, follow official responder guidance.
-
----
-
-## Tesla Collision Repair Procedures
-
-Primary seeds:
-
-- `https://service.tesla.com/docs/BodyRepair/Body_Repair_Procedures/Model_3/HTML/en-us/index.html`
-- `https://service.tesla.com/docs/BodyRepair/Body_Repair_Procedures/Model_Y/HTML/en-us/index.html`
-- `https://service.tesla.com/docs/BodyRepair/Body_Repair_Procedures/Model_Y_2025/en_us/index.html`
-
-Target content:
-
-- structural repair procedures
-- body structure materials
-- allowed operations
-- sectioning guidelines
-- repairability guidelines
-- approved welders
-- adhesives and fasteners
-- fascia repair guidelines
-- glass replacement guidance
-- wheel repairability
-- post-repair operations
-- Tesla collision repair contact/escalation guidance
-
-Special handling:
-
-- Tag as collision-shop.
-- The assistant can explain what category of repair a document discusses.
-- The assistant should not instruct an untrained user to perform structural repair.
-
----
-
-## Tesla Video Guides
-
-Primary seed:
-
-- `https://www.tesla.com/support/videos`
-
-Use only if clean transcripts are available from official Tesla pages.
-
-Do not use YouTube comments. Do not use unofficial transcripts unless explicitly approved.
-
----
-
-## NHTSA Recalls, Investigations, Complaints, and Manufacturer Communications
-
-Primary seeds:
-
-- `https://www.nhtsa.gov/search-safety-issues`
-- `https://www.nhtsa.gov/recalls`
-- `https://www.nhtsa.gov/resources-investigations-recalls`
-- `https://www.nhtsa.gov/emergency-response-guides`
-- `https://vinrcl.safercar.gov/vin/`
-
-PDF source domain:
-
-- `https://static.nhtsa.gov`
-
-Target NHTSA content:
-
-- Part 573 Safety Recall Reports
-- recall acknowledgments
-- defect investigation opening resumes
-- defect investigation closing resumes
-- recall query results
-- manufacturer communications
-- technical service bulletins
-- owner notification letters
-- remedy instructions
-- emergency response guide entries
-- complaint summaries only if needed and clearly labeled as owner-reported, non-authoritative
-
-Preferred NHTSA record format:
-
-```yaml
-doc_type: nhtsa_record
-record_type: recall | investigation | manufacturer_communication | tsb | complaint | emergency_response_guide
-nhtsa_id:
-campaign_number:
-investigation_number:
-manufacturer:
-make:
-model:
-model_year:
-component:
-summary:
-consequence:
-remedy:
-dates:
-affected_population:
-source_url:
-retrieved_at:
-content_hash:
-```
-
-Special handling:
-
-- NHTSA complaints are not authoritative findings.
-- Label complaints as owner-reported.
-- Recalls, investigations, and manufacturer communications should be prioritized over complaints.
+Coverage target: Model 3 (2017–present) and Model Y (2020–present); expand to
+Model S / X / Cybertruck once v1 is stable. Recalls alone run to 100+ records
+across the lineup; complaints number in the hundreds per model-year.
 
 ---
 
 # Safety Classification System
 
-Every chunk should receive one of the following safety classes.
+Tag every record with one safety class.
 
 | Safety Class | Meaning | Assistant Behavior |
 |---|---|---|
-| `owner_safe` | Normal owner operation or basic maintenance | Give steps and cite source |
-| `owner_caution` | Owner may inspect or perform limited checks, but should avoid deeper repair | Give safe checks, clear stop condition |
-| `service_center` | Requires Tesla service or trained technician | Explain issue and escalation path |
-| `collision_shop` | Structural/body/collision repair | Explain category and refer to qualified collision repair |
-| `first_responder` | Emergency response guidance | Conservative emergency instructions only |
-| `high_voltage_danger` | HV battery, HV cables, HV interlock, pyrotechnics, SRS, airbag, severe crash/fire/submersion | Do not provide DIY instructions; instruct user to avoid and escalate |
+| `owner_safe` | Normal owner action (e.g. check VIN, install an OTA update) | Give steps and cite source |
+| `owner_caution` | Owner may inspect, but should not repair | Give safe checks, clear stop condition |
+| `service_center` | Requires Tesla service or a trained technician | Explain issue and escalation path |
+| `first_responder` | Emergency-response guidance | Conservative emergency instructions only |
+| `high_voltage_danger` | HV battery/cables, pyrotechnics, SRS/airbag, severe crash/fire/submersion | No DIY; instruct user to avoid and escalate |
 
 ---
 
 # Required Metadata Fields
 
-Each indexed chunk should include:
+Each record file should carry consistent YAML front-matter:
 
 ```yaml
-source_domain:
+source_domain:        # nhtsa.gov | api.nhtsa.gov | static.nhtsa.gov | safercar.gov
 source_url:
-canonical_url:
 retrieved_at:
 document_title:
-document_type:
-section_path:
+document_type:        # recall | investigation | complaint | manufacturer_communication | tsb | safety_rating | emergency_response_guide
+record_type:
+nhtsa_campaign_number:
+odi_number:           # for complaints/investigations
+investigation_number:
+make:
 model:
 model_year_range:
-region:
-language:
-software_version:
-revision_date:
+component:
+summary:
+consequence:
+remedy:
+affected_population:
+ota_update_possible:
+service_required:
+authoritative:        # true for recalls/investigations/TSBs; false for complaints
 safety_class:
 owner_safe:
-procedure_name:
-alert_code:
-dtc_code:
-recall_number:
-nhtsa_campaign_number:
-component:
-tools_required:
-parts_required:
-warnings:
 content_hash:
 chunk_id:
-parent_document_id:
 ```
 
-Fields may be null if not applicable, but the schema should be consistent.
+Fields may be null if not applicable, but keep the schema consistent.
 
 ---
 
 # Retrieval Strategy
 
-Use separate indexes or filters for:
+Use separate AIAR **RAG instances** (or `--category` tags within one instance) for:
 
-1. Owner manuals
-2. DIY guides
-3. Service manuals
-4. Electrical references
-5. Service Mode
-6. Collision repair
-7. Emergency response
-8. Recalls / NHTSA records
-9. Troubleshooting alerts / DTCs
+1. Recalls
+2. Investigations
+3. Manufacturer communications / TSBs
+4. Complaints (owner-reported)
+5. Safety ratings
+6. Emergency-response guides
 
-> **AIAR mapping:** "separate indexes" = separate **RAG instances**. Ingest each
-> source group into its own instance, e.g.
-> `python -m aiar.rag.ingest corpus/tesla-owner --instance tesla-owner`, and switch
-> the active instance per question (or via the Settings page). Within one instance,
-> the `--category` tag plus the front-matter above gives you per-doc filtering.
+> **AIAR mapping:** ingest each group into its own instance, e.g.
+> `python -m aiar.rag.ingest corpus/tesla-recalls --instance tesla-recalls`, and
+> switch the active instance per question (or in the Settings page). Within one
+> instance, `--category` plus the front-matter above gives per-record filtering.
 
 Recommended retrieval flow:
 
-1. Detect model, model year, region, and software version from user question.
-2. Detect problem category.
-3. Retrieve from the safest relevant source first.
-4. Escalate to technical documents only if needed.
-5. If high-voltage, SRS, collision, or first-responder material is involved, switch to safety-first response mode.
-6. Cite every answer with source title, section, URL, and retrieval timestamp.
-7. If no relevant source is retrieved, say so. Do not guess.
+1. Detect model, model year, and component/topic from the question.
+2. Retrieve from authoritative records (recalls/investigations/TSBs) first.
+3. Use complaints only as supporting, clearly-labeled owner-reported signal.
+4. If high-voltage, airbag, or first-responder material is involved, switch to a
+   safety-first response.
+5. Cite every answer with record title, campaign/ODI number, URL, and retrieval date.
+6. If no relevant record is retrieved, say so. Do not guess.
 
 ---
 
 # Assistant Response Format
 
-The deployed assistant should answer in this structure:
-
 ```text
 Category:
-Owner-safe / Owner-caution / Service-center / Collision-shop / Emergency / High-voltage-danger
+Owner-safe / Owner-caution / Service-center / Emergency / High-voltage-danger
 
 Direct Answer:
 Brief answer to the user's question.
 
 Evidence:
-- Source title, section, URL
-- Relevant model/year/software applicability
+- Record title, campaign/ODI number, URL
+- Applicable model / year
 
-Steps You Can Safely Try:
+What You Can Safely Do:
 1.
 2.
-3.
 
-Do Not Attempt:
-- Safety-sensitive or unsupported actions
-
-When To Schedule Tesla Service:
+When To Contact Tesla Service / NHTSA:
 - Clear trigger conditions
 
 Confidence:
@@ -685,8 +255,8 @@ High / Medium / Low, with reason
 ```
 
 > **AIAR mapping:** put this response contract into the **system prompt** (Settings
-> page → system-prompt editor, or `POST /system-prompt`). The AIAR judge will then
-> score answers against it.
+> page → system-prompt editor, or `POST /api/system-prompt`). The AIAR judge then
+> scores answers against it.
 
 ---
 
@@ -695,68 +265,34 @@ High / Medium / Low, with reason
 Use these as initial tests after indexing. (In AIAR: drop them into
 `examples/cases.json` and run `python -m aiar.eval.runner` to measure RAG lift.)
 
-## Owner Manual
-
-1. Can I tow a Model 3 with only the rear wheels lifted?
-2. Where does Tesla say the most customized owner manual is located?
-3. What does the Model 3 manual say about tire pressure after changing tire pressures?
-4. What should I do if my Tesla key card is not recognized?
-5. What charging warnings apply before using an adapter?
-6. What does Tesla say about cleaning seat belts?
-7. When does the Model Y manual say to use Transport Mode?
-
-## DIY / Maintenance
-
-1. How do I replace the cabin air filter on a Model 3, and what tools are listed?
-2. What owner-performable maintenance does Tesla list?
-3. Does a Tesla need oil changes?
-4. What tire rotation guidance does Tesla provide?
-5. What maintenance items are different for cold-weather use?
-
-## Service Manual
-
-1. Where does the service manual list lifting and jacking information?
-2. What safety precautions are listed before SRS component work?
-3. What service manual section covers Diagnostic Trouble Codes?
-4. What does the manual say about firmware reinstall vs firmware update?
-5. What service class should apply to high-voltage battery removal?
-
-## Service Mode
-
-1. What is Service Mode intended for?
-2. Which guide software version is the public Service Mode guide based on?
-3. Why might the Service Mode guide differ from the vehicle screen?
-4. Which Service Mode panels relate to charging or low-voltage battery status?
-5. What should the assistant say before telling a normal owner to run a service action?
-
-## NHTSA / Recalls
-
-1. What NHTSA records exist for a given Tesla Model 3 recall campaign?
-2. Which affected models are listed in NHTSA recall 23V-085?
-3. Was a specific recall resolved by OTA update or service visit?
-4. How should the assistant distinguish a complaint from an official recall?
-5. What should an owner do if a recall may apply but they only have the vehicle year/model and no VIN?
+1. What does NHTSA recall 23V-085 cover, and how is it remedied?
+2. Which Tesla recalls were fixed by an over-the-air update versus a service visit?
+3. What recall affects the 2024 Model Y front seats?
+4. How should the assistant distinguish an NHTSA complaint from an official recall?
+5. What should an owner do if a recall may apply but they only have the year and
+   model and no VIN?
+6. What components are most commonly reported in 2023 Model 3 complaints?
+7. Was the pyrotechnic battery-disconnect issue (23V-434) an OTA fix or a service fix?
 
 ---
 
 # Evaluation Criteria
 
-Score answers from 0-5 on each dimension.
+Score answers 0–5 on each dimension.
 
 | Dimension | Description |
 |---|---|
-| Source accuracy | Answer cites the right document and section |
+| Source accuracy | Cites the right NHTSA record and campaign/ODI number |
 | Model/year specificity | Correctly handles Model 3 vs Model Y and year ranges |
+| Authority handling | Distinguishes recalls/investigations from owner complaints |
 | Safety classification | Correctly labels owner-safe vs service-only vs dangerous |
-| Procedural accuracy | Steps match official instructions |
-| Non-hallucination | Does not invent torque specs, codes, warnings, or recalls |
-| Escalation judgment | Tells user when to stop and schedule service |
-| Clarity | Normal owner can understand answer |
-| Completeness | Includes enough detail without over-answering |
+| Non-hallucination | Does not invent recalls, campaign numbers, or remedies |
+| Escalation judgment | Tells the user when to contact Tesla service or NHTSA |
+| Clarity | A normal owner can understand the answer |
 
 Minimum launch bar:
 
-- No invented safety-critical procedures.
-- No uncited recall claims.
-- No DIY instructions for HV battery, SRS/airbag, pyrotechnic, or structural collision repair.
-- Every technical answer includes source citations.
+- No invented recalls or campaign numbers.
+- Complaints always labeled as owner-reported, non-authoritative.
+- No DIY instructions for HV battery, SRS/airbag, or structural repair.
+- Every safety claim carries an NHTSA citation.

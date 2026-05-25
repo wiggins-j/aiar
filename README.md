@@ -432,8 +432,10 @@ Choose one of these paths:
   `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
 
 - **Worked example:** [`examples/corpus-briefs/tesla-manual-expert-collection-brief.md`](examples/corpus-briefs/tesla-manual-expert-collection-brief.md)
-  — a safety-first brief for a Tesla owner-manual assistant (official Tesla + NHTSA
-  sources only, safety classes, metadata schema, eval questions).
+  — a safety-first brief for a Tesla safety & recall assistant sourced from **NHTSA
+  open government data** (recalls, investigations, complaints, safety ratings).
+  Tesla's own sites block automated agents (403 / auth-gated), so this brief uses
+  NHTSA only — safety classes, metadata schema, and eval questions included.
 - **Generate your own:** paste [`examples/corpus-briefs/collection-brief-builder-prompt.md`](examples/corpus-briefs/collection-brief-builder-prompt.md)
   into any AI — it interviews you and writes a brief like the Tesla one for your domain.
 
