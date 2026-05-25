@@ -572,6 +572,43 @@ def test_aiar_delete_rag_inprocess(fresh_store):
     assert aggregator.delete_rag_instance("ghost")["status"] == 422
 
 
+def test_aiar_system_prompt_presets_inprocess(tmp_path, monkeypatch):
+    """Named presets persist to <base>/system-prompts.json: save/list/overwrite,
+    the 5-cap, delete, and not-found — independent of the active system prompt."""
+    from web import aggregator
+    monkeypatch.setenv("AIAR_BASE_DIR", str(tmp_path))
+
+    assert aggregator.list_system_prompts()["presets"] == []
+
+    res = aggregator.save_system_prompt_preset("Strict", "Be terse and literal.")
+    assert res["ok"] and res["data"]["saved"] == "Strict"
+    assert [p["name"] for p in aggregator.list_system_prompts()["presets"]] == ["Strict"]
+    assert (tmp_path / "system-prompts.json").exists()
+
+    # overwrite by same name keeps a single entry with updated text
+    aggregator.save_system_prompt_preset("Strict", "Updated text.")
+    presets = aggregator.list_system_prompts()["presets"]
+    assert len(presets) == 1 and presets[0]["text"] == "Updated text."
+
+    # fill to the cap of 5, then a 6th new name is rejected
+    for i in range(4):
+        assert aggregator.save_system_prompt_preset(f"P{i}", "x")["ok"]
+    assert len(aggregator.list_system_prompts()["presets"]) == 5
+    over = aggregator.save_system_prompt_preset("P5", "x")
+    assert not over["ok"] and over["status"] == 422 and over["error"] == "preset_limit"
+    # but overwriting an existing one still works at the cap
+    assert aggregator.save_system_prompt_preset("Strict", "y")["ok"]
+
+    # validation: empty name / empty prompt
+    assert aggregator.save_system_prompt_preset("", "x")["status"] == 400
+    assert aggregator.save_system_prompt_preset("ok", "   ")["status"] == 422
+
+    # delete
+    d = aggregator.delete_system_prompt_preset("Strict")
+    assert d["ok"] and "Strict" not in [p["name"] for p in d["data"]["presets"]]
+    assert aggregator.delete_system_prompt_preset("nope")["status"] == 404
+
+
 def test_aiar_system_prompt_inprocess():
     from web import aggregator
     from aiar.harness import pipeline
@@ -674,6 +711,11 @@ def test_aiar_settings_parity():
     assert "No RAG" in js or "No RAG" in html
     # consumes the shared API paths
     for path in ("/api/models", "/api/rag/instances", "/api/system-prompt"):
+        assert path in js
+    # system-prompt presets: dropdown + save + delete, wired to the presets API
+    assert "system-preset-select" in html
+    assert "save-preset" in html and "delete-preset" in html
+    for path in ("/api/system-prompts", "/api/system-prompts/save", "/api/system-prompts/delete"):
         assert path in js
     # escapeHtml + no-store idiom (matches the AIAR static page idiom)
     assert "escapeHtml" in js and "no-store" in js

@@ -66,6 +66,14 @@
           <p class="muted">The system prompt for the harness answer path only. It does <strong>not</strong> affect the judge or any other code-defined prompt.</p>
         </div>
         <label class="field" style="margin:0">
+          <span>Saved prompts</span>
+          <select id="system-preset-select"></select>
+        </label>
+        <div class="eval-actions">
+          <button id="delete-preset" class="secondary">Delete preset</button>
+          <span id="system-preset-message" class="muted"></span>
+        </div>
+        <label class="field">
           <span>Harness answer system prompt</span>
           <textarea id="settings-system-prompt" rows="8" placeholder="Loading..."></textarea>
         </label>
@@ -73,6 +81,13 @@
           <button id="save-system">Save</button>
           <button id="reset-system" class="secondary">Reset to default</button>
           <span id="system-message" class="muted"></span>
+        </div>
+        <label class="field" style="margin:0">
+          <span>Quick-save current prompt as a preset</span>
+          <input id="system-preset-name" type="text" maxlength="60" placeholder="Preset name (up to 5 saved)" />
+        </label>
+        <div class="eval-actions">
+          <button id="save-preset">Save preset</button>
         </div>
       </section>
 

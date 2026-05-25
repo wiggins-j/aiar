@@ -31,13 +31,16 @@ from .aggregator import (
     activity_detail,
     clear_evaluation_queue,
     delete_rag_instance,
+    delete_system_prompt_preset,
     enqueue,
     evaluation_queue,
     get_models,
     get_rag_instances,
     get_system_prompt,
     iso_now,
+    list_system_prompts,
     recent_activity,
+    save_system_prompt_preset,
     set_active_model,
     set_active_rag,
     set_system_prompt,
@@ -108,6 +111,9 @@ class WatcherHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/system-prompt":
             self._serve_json(HTTPStatus.OK, get_system_prompt())
+            return
+        if path == "/api/system-prompts":
+            self._serve_json(HTTPStatus.OK, list_system_prompts())
             return
         if path == "/healthz":
             self._serve_json(HTTPStatus.OK,
@@ -190,6 +196,17 @@ class WatcherHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/system-prompt":
             text = (body or {}).get("text")
             self._respond_result(set_system_prompt("" if text is None else str(text)))
+            return
+
+        if parsed.path == "/api/system-prompts/save":
+            self._respond_result(save_system_prompt_preset(
+                str((body or {}).get("name") or ""),
+                str((body or {}).get("text") or "")))
+            return
+
+        if parsed.path == "/api/system-prompts/delete":
+            self._respond_result(delete_system_prompt_preset(
+                str((body or {}).get("name") or "")))
             return
 
         self._serve_json(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": self.path})

@@ -16,6 +16,7 @@ Flow primitives exposed to the HTTP layer:
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -261,6 +262,92 @@ def set_system_prompt(text: str) -> Dict[str, Any]:
     source = "active" if active != pipeline.ANSWER_SYSTEM_PROMPT else "default"
     return {"ok": True, "status": 200,
             "data": {"text": active, "source": source}}
+
+
+# --- Named system-prompt presets (quick-save / load / delete) ----------------
+#
+# A small, persistent shelf of named system prompts so an operator can flip
+# between a few guardrails without retyping. Stored as a JSON array at
+# ``<base>/system-prompts.json`` (AIAR_BASE_DIR), independent of which prompt is
+# currently active. Capped so the dropdown stays a quick-pick, not a database.
+
+SYSTEM_PROMPT_PRESET_LIMIT = 5
+SYSTEM_PROMPT_NAME_MAXLEN = 60
+
+
+def _system_prompts_path() -> Path:
+    base = Path(os.environ.get("AIAR_BASE_DIR", "~/.aiar")).expanduser()
+    return Path(os.environ.get(
+        "AIAR_SYSTEM_PROMPTS_FILE", str(base / "system-prompts.json"))).expanduser()
+
+
+def _read_presets() -> List[Dict[str, str]]:
+    path = _system_prompts_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out: List[Dict[str, str]] = []
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and str(item.get("name") or "").strip():
+                out.append({"name": str(item["name"]), "text": str(item.get("text") or "")})
+    return out
+
+
+def _write_presets(presets: List[Dict[str, str]]) -> None:
+    path = _system_prompts_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(presets, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def list_system_prompts() -> Dict[str, Any]:
+    """List saved system-prompt presets and the cap."""
+    return {"presets": _read_presets(), "limit": SYSTEM_PROMPT_PRESET_LIMIT}
+
+
+def save_system_prompt_preset(name: str, text: str) -> Dict[str, Any]:
+    """Save (or overwrite by name) a named system-prompt preset. New names are
+    rejected once the cap is reached; overwriting an existing name always works.
+    Does NOT change the active system prompt — it just shelves the text."""
+    name = (name or "").strip()
+    text = text or ""
+    if not name:
+        return {"ok": False, "status": 400, "error": "missing_name"}
+    if len(name) > SYSTEM_PROMPT_NAME_MAXLEN:
+        return {"ok": False, "status": 422, "error": "name_too_long"}
+    if not text.strip():
+        return {"ok": False, "status": 422, "error": "empty_prompt"}
+    presets = _read_presets()
+    idx = next((i for i, p in enumerate(presets)
+                if p["name"].lower() == name.lower()), None)
+    if idx is None:
+        if len(presets) >= SYSTEM_PROMPT_PRESET_LIMIT:
+            return {"ok": False, "status": 422, "error": "preset_limit",
+                    "data": f"at most {SYSTEM_PROMPT_PRESET_LIMIT} presets"}
+        presets.append({"name": name, "text": text})
+    else:
+        presets[idx] = {"name": name, "text": text}
+    _write_presets(presets)
+    return {"ok": True, "status": 200, "data": {"presets": presets, "saved": name}}
+
+
+def delete_system_prompt_preset(name: str) -> Dict[str, Any]:
+    """Delete a named system-prompt preset. The active system prompt is left
+    as-is (deleting a preset never changes what the harness is currently using)."""
+    name = (name or "").strip()
+    if not name:
+        return {"ok": False, "status": 400, "error": "missing_name"}
+    presets = _read_presets()
+    remaining = [p for p in presets if p["name"].lower() != name.lower()]
+    if len(remaining) == len(presets):
+        return {"ok": False, "status": 404, "error": "preset_not_found"}
+    _write_presets(remaining)
+    return {"ok": True, "status": 200, "data": {"presets": remaining, "deleted": name}}
 
 
 # --------------------------------------------------------------------------
