@@ -13,7 +13,7 @@ the "vocabulary gap." Two pre-retrieval techniques close it:
 
 Set the mode with `RAG_QUERY_REWRITE_MODE`. Implementation:
 [`aiar/rag/query_rewrite.py`](../../aiar/rag/query_rewrite.py). Each named RAG
-instance can carry its own rewrite/HyDE prompts (the Tesla/OSRS examples do), or
+instance can carry its own rewrite/HyDE prompts (the Tesla example does), or
 fall back to generic built-ins.
 
 ## When it helps / when to skip

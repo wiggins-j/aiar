@@ -4,15 +4,22 @@ Pages:
     GET  /                       -> simulate console (run a prompt)
     GET  /activity               -> recent LLM calls (mark for evaluation)
     GET  /evaluation             -> evaluation queue (score 1-10 + reground)
+    GET  /settings               -> model / RAG instance / system-prompt settings
 
 JSON API:
-    POST /api/simulate           {prompt, rag?, think?, reground?}
+    POST /api/simulate           {prompt, rag?, think?, reground?, judge?, instance?}
     GET  /api/activity
     GET  /api/activity/detail?call_id=...
     POST /api/activity/evaluate  {call_id}                  (enqueue)
+    POST /api/activity/clear                                (clear the call log)
     GET  /api/evaluation/queue
     POST /api/evaluation/clear
     POST /api/evaluation/verdict {call_id, score, correction}  (score + reground)
+    GET  /api/models             ;  POST /api/models/active {model}
+    GET  /api/rag/instances      ;  POST /api/rag/active {name}  ;  POST /api/rag/delete {name}
+    GET  /api/system-prompt      ;  POST /api/system-prompt {text}
+    GET  /api/system-prompts     ;  POST /api/system-prompts/save {name,text}
+                                 ;  POST /api/system-prompts/delete {name}
     GET  /healthz
 
 Run with:  python -m web.server   (or  python web/main.py)

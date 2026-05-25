@@ -206,8 +206,9 @@ written.
 `python -m aiar.harness "How many days do I have to request a refund?"`
 (use a question relevant to MY docs). Show me the answer, the judge verdict
 (rating + reason + confidence), and the call_id. Useful flags to mention:
-`--no-rag` (blind A/B baseline), `--think` (show reasoning), `--json` (full
-result), `--reground` (apply prior corrections), `--top-k N`.
+`--no-rag` (blind A/B baseline), `--no-judge` (skip the LLM judge), `--think`
+(show reasoning), `--json` (full result), `--reground` (apply prior corrections),
+`--top-k N`.
 Then show retrieval lift with the A/B runner:
 `python -m aiar.eval.runner ./examples/cases.json` (reports RAG-on vs RAG-off
 delta; positive = RAG helped).
@@ -219,28 +220,32 @@ then re-run the harness so the reranker model loads and the difference is felt.
 
 === STEP 7: Launch the watcher GUI ===
 `python -m web.server` → open http://127.0.0.1:8088 (or my host/port). It has
-four pages: Simulate (run a prompt, see answer + verdict, mark it), Activity
-(every logged LLM call, mark any one), Evaluation queue (score 1–10 + correct),
-and Settings (switch the active Qwen model, switch the active RAG instance —
+four pages: Simulate (run a prompt, see answer + verdict, mark it; toggles for Use
+RAG, Reground, Show Reasoning, and LLM Judging), Activity (every logged LLM call,
+mark any one, or Clear Recent Activity), Evaluation Queue (score 1–10 + correct),
+and Settings (switch the active Qwen model; switch the active RAG instance —
 including a first-class "No RAG" option, with the bundled Acme demo shown as
-**Example RAG** instead of raw `default` — and edit the harness system prompt).
-Tell me it's serving and what each page does.
+**Example RAG** instead of raw `default` — delete a RAG instance; and edit the
+harness system prompt, with named save/load presets). Tell me it's serving and what
+each page does.
 
 If I'm on a headless Ubuntu LTS box or just don't want a browser, I still want
 the non-GUI path covered. The core loop is already CLI-first (`aiar.rag.ingest`,
 `aiar.harness`, `aiar.eval.runner`). For watcher-only actions that the CLI does
 not expose directly yet (Activity, queue maintenance, live Settings changes),
 run `python -m web.server` and use its local JSON API instead:
-- `POST /api/simulate`
+- `POST /api/simulate`  (body may include `rag`, `think`, `reground`, `judge`, `instance`)
 - `GET /api/activity`
 - `GET /api/activity/detail?call_id=...`
 - `POST /api/activity/evaluate`
+- `POST /api/activity/clear`
 - `GET /api/evaluation/queue`
 - `POST /api/evaluation/verdict`
 - `POST /api/evaluation/clear`
 - `GET /api/models` and `POST /api/models/active`
-- `GET /api/rag/instances` and `POST /api/rag/active`
+- `GET /api/rag/instances`, `POST /api/rag/active`, and `POST /api/rag/delete`
 - `GET /api/system-prompt` and `POST /api/system-prompt`
+- `GET /api/system-prompts`, `POST /api/system-prompts/save`, `POST /api/system-prompts/delete`  (named presets)
 Be explicit that there is no separate first-class CLI for Activity / queue /
 Settings today; use the GUI or the watcher JSON API.
 If no browser is available, do NOT stop at Step 7 — use these watcher API

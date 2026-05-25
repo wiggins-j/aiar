@@ -18,7 +18,7 @@ env/
 corpus/
 
 # Local-only demo / recording scripts + private collections — never published
-# (e.g. a health-medicine brief + schema: name them *.local.md / *.local.json)
+# (name any private brief/schema/corpus files *.local.md / *.local.json)
 DEMO_RECORDING.md
 *.local.md
 *.local.json

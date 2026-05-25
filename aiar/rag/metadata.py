@@ -6,8 +6,8 @@ authority/trust tier, claim type, dates, codes, etc. This module lets you DECLAR
 that expected metadata as a small JSON **schema** and VALIDATE that a corpus folder
 conforms, so a knowledge base stays consistent and its trust signals are reliable.
 
-It is domain-agnostic: ship a schema per collection (a Tesla schema, a health
-schema, your own) and validate against it. Nothing here is tied to a domain.
+It is domain-agnostic: ship a schema per collection (e.g. a Tesla schema, or your
+own) and validate against it. Nothing here is tied to a domain.
 
 Schema format (JSON)::
 
