@@ -231,6 +231,18 @@ The first reranked query downloads + loads the cross-encoder model
 (`cross-encoder/ms-marco-MiniLM-L-6-v2`); it is then held in memory. Re-run the
 harness or the A/B runner to feel the difference.
 
+**Explore + tune each method.** Every quality knob has a short, runnable guide in
+[`examples/feature-guides/`](examples/feature-guides/) — each with a *"What it is"*
+explainer and a *"Set it up"* recipe. Hand one to your AI agent ("What's the
+reranker?" / "Let's set up hybrid retrieval") or read them yourself:
+[hybrid](examples/feature-guides/hybrid-retrieval.md) ·
+[reranker](examples/feature-guides/reranker.md) ·
+[query rewrite / HyDE](examples/feature-guides/query-rewrite-hyde.md) ·
+[grounding](examples/feature-guides/grounding-reinjection.md) ·
+[top-k](examples/feature-guides/top-k.md) ·
+[measure the lift](examples/feature-guides/measure-lift.md). Measure each change on
+your own corpus rather than trusting defaults.
+
 ---
 
 ## 6. Launch the watcher GUI

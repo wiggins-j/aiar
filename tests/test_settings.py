@@ -766,6 +766,20 @@ def test_aiar_titles_title_cased():
         assert label in settings
 
 
+def test_aiar_feature_guides_present():
+    """Retrieval-quality feature guides exist and are surfaced by the prompt/docs."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    guides = root / "examples" / "feature-guides"
+    for name in ("README.md", "reranker.md", "hybrid-retrieval.md",
+                 "query-rewrite-hyde.md", "grounding-reinjection.md", "top-k.md",
+                 "measure-lift.md"):
+        assert (guides / name).exists(), f"missing feature guide {name}"
+    readme = (root / "README.md").read_text()
+    assert "NEXT STEPS" in readme and "examples/feature-guides/" in readme
+    assert "examples/feature-guides/" in (root / "PLAYBOOK.md").read_text()
+
+
 def test_aiar_nav_pill_added_all_pages():
     from pathlib import Path
     static = Path(__file__).resolve().parents[1] / "web" / "static"

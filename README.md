@@ -276,6 +276,25 @@ commands I would rerun next for:
 - A/B eval
 - watcher GUI
 - headless watcher API / `curl` path if no browser is available
+
+=== NEXT STEPS: Explore retrieval-quality methods ===
+After the loop works, give me a short **Next Steps** menu: the OPTIONAL quality
+methods I can turn on and TUNE to make retrieval better, and invite me to explore
+them. Each has a runnable guide in `examples/feature-guides/`:
+- Hybrid retrieval (vector + BM25)   -> examples/feature-guides/hybrid-retrieval.md
+- Cross-encoder reranker             -> examples/feature-guides/reranker.md
+- Query rewrite / HyDE               -> examples/feature-guides/query-rewrite-hyde.md
+- Grounding reinjection              -> examples/feature-guides/grounding-reinjection.md
+- Top-K (context size)               -> examples/feature-guides/top-k.md
+- Measure the lift (A/B + ablation)  -> examples/feature-guides/measure-lift.md
+Tell me I can either:
+- ask "What is <method>?" (e.g. "What's the reranker?") and you'll EXPLAIN it from
+  that guide's "What it is" section, or
+- say "Let's set up <method>" (e.g. "Set up the reranker") and you'll OPEN the
+  matching guide and run its "Set it up" steps with me, then measure the lift.
+Recommend the **reranker + hybrid** as the highest-impact pair to start, and remind
+me to MEASURE each change on my own corpus
+(`examples/feature-guides/measure-lift.md`) rather than trusting defaults.
 ````
 
 ---
