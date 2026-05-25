@@ -17,9 +17,11 @@ env/
 # (large + regenerable; the brief in briefs/ is the reproducible source of truth)
 corpus/
 
-# Local-only demo / recording scripts — never published
+# Local-only demo / recording scripts + private collections — never published
+# (e.g. a health-medicine brief + schema: name them *.local.md / *.local.json)
 DEMO_RECORDING.md
 *.local.md
+*.local.json
 
 # Test / tooling
 .pytest_cache/

@@ -1,0 +1,17 @@
+{
+  "name": "tesla-open-data",
+  "description": "Worked example schema matching the Tesla open-data collection brief (examples/corpus-briefs/tesla-manual-expert-collection-brief.md).",
+  "fields": {
+    "source_domain": {"required": true, "type": "str"},
+    "source_url": {"required": true, "type": "str"},
+    "retrieved_at": {"required": true, "type": "str"},
+    "document_title": {"required": true, "type": "str"},
+    "document_type": {"required": true, "enum": ["recall", "investigation", "complaint", "complaint_summary", "tsb", "safety_rating", "spec", "efficiency", "vehicle_metadata", "charging_station", "charging_overview", "review", "software_update", "news", "sec_filing", "market_estimate", "emergency_response_guide"]},
+    "authoritative": {"required": true, "type": "bool"},
+    "make": {"required": false, "type": "str"},
+    "model": {"required": false},
+    "model_year_range": {"required": false},
+    "safety_class": {"required": false, "enum": ["owner_safe", "owner_caution", "service_center", "collision_shop", "first_responder", "high_voltage_danger"]},
+    "source_tier": {"required": false, "type": "int"}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "generic",
+  "description": "Domain-agnostic starter schema for AIAR corpus front-matter. Copy it and add fields/enums for your domain.",
+  "fields": {
+    "source_domain": {"required": true, "type": "str"},
+    "source_url": {"required": true, "type": "str"},
+    "retrieved_at": {"required": true, "type": "str", "description": "ISO date the record was collected"},
+    "document_title": {"required": true, "type": "str"},
+    "document_type": {"required": true, "type": "str"},
+    "authoritative": {"required": true, "type": "bool", "description": "true = official/regulator/spec; false = anecdote/estimate"},
+    "source_tier": {"required": false, "type": "int", "description": "trust tier (1 = highest authority)"},
+    "region": {"required": false, "type": "str"},
+    "content_hash": {"required": false, "type": "str"}
+  }
+}

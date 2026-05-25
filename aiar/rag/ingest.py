@@ -164,6 +164,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "named instance is created on first ingest.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would be ingested without writing to the store")
+    parser.add_argument("--validate", default=None, metavar="SCHEMA",
+                        help="Validate each document's front-matter against a "
+                             "metadata schema JSON before ingesting "
+                             "(warnings only; never blocks)")
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -178,6 +182,23 @@ def main(argv=None) -> int:
     if not folder.is_dir():
         print(f"error: {folder} is not a directory", file=sys.stderr)
         return 2
+    if args.validate:
+        from aiar.rag import metadata
+        try:
+            schema = metadata.load_schema(args.validate)
+        except (OSError, ValueError) as exc:
+            print(f"error: could not load schema {args.validate}: {exc}", file=sys.stderr)
+            return 2
+        results = metadata.validate_folder(folder, schema)
+        bad = {p: iss for p, iss in results.items() if iss}
+        if bad:
+            print(f"metadata: {len(bad)}/{len(results)} file(s) have schema issues "
+                  f"(warning only — ingest continues):", file=sys.stderr)
+            for p, iss in bad.items():
+                print(f"  {p}: {'; '.join(iss)}", file=sys.stderr)
+        else:
+            print(f"metadata: all {len(results)} file(s) valid against "
+                  f"{schema.get('name', '?')!r}.")
     chunks = ingest_folder(folder, category=args.category)
     if not chunks:
         print("No chunks produced (no supported documents found).", file=sys.stderr)

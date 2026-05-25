@@ -173,6 +173,10 @@ python -m aiar.rag.ingest corpus/mydomain --instance mydomain --category mydomai
 
 Notes:
 - Keep the brief in `briefs/` (NOT inside `corpus/<name>/`) so it isn't indexed.
+- **Metadata schema (optional, recommended):** turn the brief's "Required Metadata
+  Fields" into a JSON schema and validate the collected files before ingesting —
+  `python -m aiar.rag.metadata validate corpus/<name> --schema my.schema.json`
+  (or `ingest --validate my.schema.json`). See `examples/metadata-schemas/`.
 - The brief's "Assistant Response Format" → paste into the **system prompt**
   (Settings page, §6). Its example questions → `examples/cases.json` for the A/B
   runner (§4). See `examples/corpus-briefs/README.md` for the full workflow.

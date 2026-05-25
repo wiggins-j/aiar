@@ -18,8 +18,13 @@ README/PLAYBOOK: **"Building your RAG corpus: two ways."**)
 2. **Hand the brief to an AI collector** (an agent with web + file tools). It
    fetches + normalizes documents into `corpus/<name>/` (one topic/procedure per
    `.md`/`.txt`/`.json` file, with YAML front-matter). `corpus/` is git-ignored.
-3. **Ingest into AIAR** — `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
-4. **Wire it up** — put the brief's "Assistant Response Format" into the system
+3. **(Optional) Validate the metadata** — declare a schema for your brief's
+   "Required Metadata Fields" and check the collected files before ingesting:
+   `python -m aiar.rag.metadata validate corpus/<name> --schema my.schema.json`
+   (or pass `--validate my.schema.json` to `ingest`). See
+   [`../metadata-schemas/`](../metadata-schemas/).
+4. **Ingest into AIAR** — `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
+5. **Wire it up** — put the brief's "Assistant Response Format" into the system
    prompt (Settings page), load its example questions into `examples/cases.json`,
    and run `python -m aiar.eval.runner` to measure RAG lift.
 
