@@ -194,6 +194,13 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return 2
     written = store.add(chunks, instance=instance)
+    # A corpus with content is no longer a draft — publish it so the watcher GUI
+    # shows it as ready instead of perpetually "[draft]".
+    if (store.chunk_count(instance=instance) or 0) > 0:
+        try:
+            store.publish_instance(instance)
+        except Exception as exc:
+            logger.warning("ingest: could not publish instance %r: %s", instance, exc)
     print(f"Wrote {written} new chunks ({len(chunks)} candidates) "
           f"to instance {instance!r}.")
     return 0

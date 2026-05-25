@@ -88,6 +88,18 @@ def test_aiar_ingest_cli_writes_to_active_and_named_instance(fresh_store, tmp_pa
     assert fresh_store.chunk_count(instance="tesla") == before
 
 
+def test_aiar_ingest_publishes_instance(fresh_store, tmp_path):
+    """A successful ingest marks the instance 'published' (not left as draft) so
+    the GUI doesn't show a permanent [draft] badge."""
+    from aiar.rag import ingest as ingest_mod
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "n.md").write_text("AIAR publish-on-ingest test. " * 30, encoding="utf-8")
+    assert ingest_mod.main([str(docs), "--instance", "pubtest"]) == 0
+    rows = {r["name"]: r for r in fresh_store.list_instances()}
+    assert rows["pubtest"]["status"] == "published"
+
+
 def test_aiar_instance_isolation(fresh_store):
     """Ingest into two named instances; queries + counts never cross-talk."""
     fresh_store.create_instance("alpha")
