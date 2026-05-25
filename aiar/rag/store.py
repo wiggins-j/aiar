@@ -299,28 +299,38 @@ def list_instances() -> List[dict]:
 
 # --- reads / writes (instance-aware) ---------------------------------------
 
+# ChromaDB rejects a single get()/add() larger than its internal cap (~5461,
+# from the SQLite variable limit), so batch large ingests under it.
+_MAX_ADD_BATCH = 5000
+
+
 def add(chunks: List[Chunk], *, instance: str) -> int:
     """Embed and store chunks into ``instance``'s collection. Skip duplicates.
-    Returns count added. ``instance`` is REQUIRED (write isolation)."""
+    Returns count added. ``instance`` is REQUIRED (write isolation). Large
+    ingests are written in batches so a corpus over ChromaDB's per-call cap
+    (~5461 items) does not fail."""
     col = _handle(instance)
     if col is None or not chunks:
         return 0
     try:
         ids = [_chunk_id(c) for c in chunks]
-        existing = set(col.get(ids=ids)["ids"])
+        existing: set = set()
+        for i in range(0, len(ids), _MAX_ADD_BATCH):
+            got = col.get(ids=ids[i:i + _MAX_ADD_BATCH])
+            existing.update(got.get("ids") or [])
         new = [(c, i) for c, i in zip(chunks, ids) if i not in existing]
         if not new:
             return 0
         new_chunks, new_ids = zip(*new)
         embeddings = _embedder.encode([c.text for c in new_chunks]).tolist()
-        col.add(
-            ids=list(new_ids),
-            embeddings=embeddings,
-            documents=[c.text for c in new_chunks],
-            metadatas=[{"source": c.source, "title": c.title,
-                        "index": c.chunk_index, "category": c.category}
-                       for c in new_chunks],
-        )
+        documents = [c.text for c in new_chunks]
+        metadatas = [{"source": c.source, "title": c.title,
+                      "index": c.chunk_index, "category": c.category}
+                     for c in new_chunks]
+        for i in range(0, len(new_chunks), _MAX_ADD_BATCH):
+            sl = slice(i, i + _MAX_ADD_BATCH)
+            col.add(ids=list(new_ids[sl]), embeddings=embeddings[sl],
+                    documents=documents[sl], metadatas=metadatas[sl])
         return len(new_chunks)
     except Exception as exc:
         logger.error("store: add failed: %s", exc)

@@ -100,6 +100,17 @@ def test_aiar_ingest_publishes_instance(fresh_store, tmp_path):
     assert rows["pubtest"]["status"] == "published"
 
 
+def test_aiar_add_batches_over_cap(fresh_store, monkeypatch):
+    """store.add() writes in batches so an ingest larger than ChromaDB's per-call
+    cap succeeds (regression: a single add() of >5461 chunks used to fail)."""
+    monkeypatch.setattr(fresh_store, "_MAX_ADD_BATCH", 2)
+    fresh_store.create_instance("big")
+    chunks = [_chunk(f"d{i}.md", f"unique chunk text number {i} alpha beta", idx=i)
+              for i in range(5)]
+    assert fresh_store.add(chunks, instance="big") == 5   # 5 items, batch size 2
+    assert fresh_store.chunk_count(instance="big") == 5
+
+
 def test_aiar_instance_isolation(fresh_store):
     """Ingest into two named instances; queries + counts never cross-talk."""
     fresh_store.create_instance("alpha")
