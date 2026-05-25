@@ -98,7 +98,8 @@ guidance — CPU-only works at every size, just slower):
 git clone https://github.com/wiggins-j/aiar.git aiar && cd aiar
 # or clone your own fork instead, or use an existing local checkout directly
 
-python -m venv .venv
+python3 -m venv .venv              # if bare `python` is the correct launcher on
+                                   # your machine, that is fine too
 source .venv/bin/activate              # Windows (PowerShell): .venv\Scripts\Activate.ps1
                                        # Windows (cmd):        .venv\Scripts\activate.bat
 
@@ -108,6 +109,11 @@ pip install -e '.[rag]'
 # Equivalent fallback if you prefer requirements files:
 # pip install -r requirements.txt -r requirements-rag.txt
 ```
+
+On newer Python/macOS combinations, the RAG stack can need a few GiB of
+temporary free disk space while pip builds or unpacks dependencies. If install
+fails with `OSError: [Errno 28] No space left on device`, free space first and
+retry.
 
 Point AIAR at the model you pulled (this is the ONLY model setting):
 
@@ -121,6 +127,8 @@ Verify the install before ingesting:
 ```bash
 aiar-doctor
 ```
+
+If `aiar-doctor` is not found, the package install did not complete.
 
 Optional: source the full config template so every path/flag has a value:
 

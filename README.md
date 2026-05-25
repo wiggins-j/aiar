@@ -22,12 +22,20 @@ controls in place.
 For a fresh local setup, prefer the package-extras install path:
 
 ```bash
+# Use the Python launcher that exists on your machine:
+# - many macOS/Linux setups: python3
+# - many Windows setups:     py
+# - use bare python only if it resolves to your intended interpreter
 git clone https://github.com/wiggins-j/aiar.git
 cd aiar
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e '.[rag]'
 ```
+
+The RAG extra is the right default, but it is not tiny: on newer Python/macOS
+combinations it may need to build or unpack large dependency wheels, so leave a
+few GiB of temporary free disk space if you can.
 
 If you also want the optional FastAPI harness service:
 
@@ -43,6 +51,7 @@ aiar-doctor
 
 `aiar-doctor` verifies the Python version, optional RAG dependencies, Ollama,
 active model visibility, RAG store readiness, and the bundled example corpus.
+If `aiar-doctor` is missing, the package install did not complete.
 
 ## 5-minute demo
 
@@ -56,6 +65,9 @@ python -m web.server
 
 Then open `http://127.0.0.1:8088` and use the **Example RAG** / `default`
 instance.
+
+For retrieval tuning after the first demo, jump straight to the roadmap:
+[examples/feature-guides/improving-rag.md](/Users/wiggins/GitHub/aiar/examples/feature-guides/improving-rag.md).
 
 ## ⚡ Quick start: hand this to your AI
 
