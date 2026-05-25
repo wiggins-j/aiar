@@ -13,8 +13,11 @@ async function runPrompt() {
   const prompt = $("prompt").value.trim();
   if (!prompt) { $("status").textContent = "Enter a prompt first."; return; }
   const runBtn = $("run");
+  const judge = $("judge").checked;
   runBtn.disabled = true;
-  $("status").textContent = "Running through the harness (retrieve → answer → judge)...";
+  $("status").textContent = judge
+    ? "Running through the harness (retrieve → answer → judge)..."
+    : "Running through the harness (retrieve → answer)...";
   $("mark-message").textContent = "";
   try {
     const resp = await fetch("/api/simulate", {
@@ -25,6 +28,7 @@ async function runPrompt() {
         rag: $("rag").checked,
         reground: $("reground").checked,
         think: $("think").checked,
+        judge,
       }),
     });
     const data = await resp.json();

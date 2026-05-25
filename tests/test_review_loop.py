@@ -36,6 +36,24 @@ def test_answer_prompt_uses_captured_call_id(monkeypatch):
     assert result["call_id"] == "call-123"
 
 
+def test_simulate_forwards_judge_toggle(monkeypatch):
+    """The Simulate page's LLM-judging toggle flows through to answer_prompt:
+    judge=False skips the LLM-as-judge (no verdict)."""
+    import aiar.harness as harness
+    captured = {}
+
+    def fake_answer(prompt, **kwargs):
+        captured.clear()
+        captured.update(kwargs)
+        return {"answer": "a", "verdict": None, "call_id": "x"}
+
+    monkeypatch.setattr(harness, "answer_prompt", fake_answer)
+    aggregator.simulate_prompt("q", rag=False, judge=False)
+    assert captured.get("judge") is False
+    aggregator.simulate_prompt("q", rag=False, judge=True)
+    assert captured.get("judge") is True
+
+
 def test_queue_and_reground_use_raw_prompt(tmp_path, monkeypatch):
     log_dir = tmp_path / "logs"
     base_dir = tmp_path / "grounding"

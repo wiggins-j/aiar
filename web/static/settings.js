@@ -97,10 +97,44 @@ async function loadRag() {
     const noneLabel = escapeHtml(noneOption.display_name || "No RAG");
     options.push(`<option value="none"${noneActive ? " selected" : ""}>${noneLabel}${noneActive ? " (active)" : ""}</option>`);
     sel.innerHTML = options.join("");
+    updateDeleteState();
     updateActiveSummary(null, data.active_display_name || active);
   } catch (err) {
     sel.innerHTML = '<option value="">load failed</option>';
     msg.textContent = "Failed to load RAG instances: " + err;
+  }
+}
+
+// The default instance and the "No RAG" sentinel are not deletable.
+function updateDeleteState() {
+  const name = $("settings-rag-select").value;
+  $("delete-rag").disabled = !name || name === "none" || name === "default";
+}
+
+async function deleteRag() {
+  const sel = $("settings-rag-select");
+  const btn = $("delete-rag");
+  const msg = $("rag-message");
+  const name = sel.value;
+  if (!name || name === "none" || name === "default") return;
+  const label = sel.options[sel.selectedIndex]?.text || name;
+  if (!window.confirm(`Delete RAG instance "${label}"? This removes its corpus permanently and cannot be undone.`)) return;
+  btn.disabled = true;
+  btn.textContent = "Deleting...";
+  try {
+    const resp = await fetch("/api/rag/delete", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "delete_failed");
+    msg.textContent = `Deleted. Active RAG is now ${escapeHtml(data.active_display_name || data.active)}.`;
+    await loadRag();
+  } catch (err) {
+    msg.textContent = "Failed: " + err;
+  } finally {
+    btn.textContent = "Delete RAG";
+    updateDeleteState();
   }
 }
 
@@ -194,6 +228,8 @@ function updateActiveSummary(model, rag) {
 
 $("apply-model").addEventListener("click", applyModel);
 $("apply-rag").addEventListener("click", applyRag);
+$("delete-rag").addEventListener("click", deleteRag);
+$("settings-rag-select").addEventListener("change", updateDeleteState);
 $("save-system").addEventListener("click", saveSystemPrompt);
 $("reset-system").addEventListener("click", resetSystemPrompt);
 

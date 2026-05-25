@@ -194,6 +194,19 @@ class Registry:
             self._save()
             return desc
 
+    def delete(self, name: str) -> bool:
+        """Remove an instance from the registry. Returns True if it was present.
+        The ``default`` instance cannot be removed — it is the born-aware base
+        and is re-created on the next load."""
+        if name == DEFAULT_INSTANCE:
+            raise ValueError("cannot delete the default instance")
+        with self._lock:
+            if name not in self._entries:
+                return False
+            del self._entries[name]
+            self._save()
+            return True
+
     def backfill(self, name: str) -> InstanceDescriptor:
         """Register a collection discovered on disk that has no registry entry
         (self-heal). Surfaces it as a draft with default config."""

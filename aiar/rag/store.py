@@ -203,6 +203,52 @@ def publish_instance(name: str) -> None:
     _registry.publish(name)
 
 
+def delete_instance(name: str) -> dict:
+    """Delete a RAG instance: drop its ChromaDB collection, registry entry, and
+    cached collection handle + BM25 index. The ``default`` instance and the
+    ``none`` sentinel cannot be deleted. If the deleted instance was active, the
+    active resets to ``default``. Returns ``{"deleted": name, "active": ...}``.
+    """
+    global _active
+    if _registry is None:
+        init()
+    if not _available or _client is None or _registry is None:
+        raise RuntimeError("store unavailable")
+    name = (name or "").strip()
+    if not name or name == NO_RAG:
+        raise ValueError(f"cannot delete: {name!r}")
+    if name == instances.DEFAULT_INSTANCE:
+        raise ValueError("cannot delete the default instance")
+    desc = _registry.get(name)
+    if desc is None:
+        raise ValueError(f"unknown instance: {name!r}")
+    try:
+        _client.delete_collection(desc.collection)
+    except Exception as exc:  # already gone / never created — proceed to deregister
+        logger.debug("store: delete_collection(%s) failed: %s", desc.collection, exc)
+    _collections.pop(name, None)
+    _registry.delete(name)
+    try:
+        from aiar.rag import lexical
+        lexical.invalidate(instance=name)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    # Purge this instance's grounding corrections (its own on-disk subdir) so a
+    # delete leaves no orphaned per-RAG state behind. The shared infrastructure
+    # (registry file, store, flat/global corrections) is untouched.
+    try:
+        import shutil
+        from aiar.grounding.store import GroundingStore
+        gdir = GroundingStore(instance=name).root
+        if gdir.is_dir():
+            shutil.rmtree(gdir, ignore_errors=True)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    if _active == name:
+        _active = instances.DEFAULT_INSTANCE
+    return {"deleted": name, "active": active_instance()}
+
+
 def set_active(name: str) -> None:
     """Flip the process-global active instance (no restart). Validates the
     instance is registered. Accepts the ``none`` sentinel (No RAG)."""

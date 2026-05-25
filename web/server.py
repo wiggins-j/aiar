@@ -30,6 +30,7 @@ from urllib import parse
 from .aggregator import (
     activity_detail,
     clear_evaluation_queue,
+    delete_rag_instance,
     enqueue,
     evaluation_queue,
     get_models,
@@ -132,6 +133,7 @@ class WatcherHandler(BaseHTTPRequestHandler):
                     rag=bool(body.get("rag", True)),
                     think=bool(body.get("think", False)),
                     reground=bool(body.get("reground", False)),
+                    judge=bool(body.get("judge", True)),
                     instance=(str(body["instance"]).strip()
                               if body.get("instance") else None),
                     model=(str(body["model"]).strip()
@@ -179,6 +181,10 @@ class WatcherHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/rag/active":
             self._respond_result(set_active_rag(str((body or {}).get("name") or "")))
+            return
+
+        if parsed.path == "/api/rag/delete":
+            self._respond_result(delete_rag_instance(str((body or {}).get("name") or "")))
             return
 
         if parsed.path == "/api/system-prompt":

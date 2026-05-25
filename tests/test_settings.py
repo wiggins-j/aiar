@@ -142,6 +142,63 @@ def test_aiar_set_active_rejects_unknown(fresh_store):
         fresh_store.set_active("does-not-exist")
 
 
+def test_aiar_delete_instance(fresh_store):
+    """delete_instance drops the collection + registry entry; the instance no
+    longer lists, and a fresh handle to its name starts empty (no stale data)."""
+    fresh_store.create_instance("alpha")
+    fresh_store.add([_chunk("a.md", "alpha content to be deleted")], instance="alpha")
+    assert fresh_store.chunk_count(instance="alpha") == 1
+
+    res = fresh_store.delete_instance("alpha")
+    assert res == {"deleted": "alpha", "active": "default"}
+    names = {r["name"] for r in fresh_store.list_instances()}
+    assert "alpha" not in names
+    # Re-resolving the name auto-creates a fresh, empty collection (not the old data).
+    assert fresh_store.chunk_count(instance="alpha") == 0
+
+
+def test_aiar_delete_active_instance_resets_to_default(fresh_store):
+    """Deleting the active instance falls back to ``default`` so reads stay valid."""
+    fresh_store.create_instance("alpha")
+    fresh_store.set_active("alpha")
+    assert fresh_store.active_instance() == "alpha"
+    res = fresh_store.delete_instance("alpha")
+    assert res["active"] == "default"
+    assert fresh_store.active_instance() == "default"
+
+
+def test_aiar_delete_instance_guards(fresh_store):
+    """The default instance and the ``none`` sentinel are not deletable; an
+    unknown name raises rather than silently succeeding."""
+    with pytest.raises(ValueError):
+        fresh_store.delete_instance("default")
+    with pytest.raises(ValueError):
+        fresh_store.delete_instance("none")
+    with pytest.raises(ValueError):
+        fresh_store.delete_instance("does-not-exist")
+
+
+def test_aiar_delete_instance_cleans_grounding(fresh_store, tmp_path, monkeypatch):
+    """A full delete also purges the instance's own grounding corrections subdir,
+    while the shared grounding root and global (flat) corrections survive."""
+    from aiar.grounding import store as grounding_store
+    from aiar.eval.schemas import Verdict
+    monkeypatch.setenv("GROUNDING_BASE_DIR", str(tmp_path))
+    v = Verdict(rating="bad", reason="wrong")
+    grounding_store.record("how long?", v, correction="alpha ans",
+                           base=tmp_path, instance="alpha")
+    grounding_store.record("global q", v, correction="global ans", base=tmp_path)
+    inst_dir = tmp_path / "grounding" / "alpha"
+    assert inst_dir.is_dir()
+
+    fresh_store.create_instance("alpha")
+    fresh_store.delete_instance("alpha")
+
+    assert not inst_dir.exists()                              # per-RAG state purged
+    assert (tmp_path / "grounding").is_dir()                  # shared root kept
+    assert grounding_store.lookup("global q", base=tmp_path) != []  # globals intact
+
+
 def test_aiar_registry_persists_and_self_heals(fresh_store, tmp_path):
     """A descriptor is written to registry.json; a rag_* collection with no
     registry entry is back-filled as a draft on the next init (self-heal)."""
@@ -498,6 +555,23 @@ def test_aiar_rag_instances_inprocess(fresh_store):
     assert res_none["data"]["active_display_name"] == "No RAG"
 
 
+def test_aiar_delete_rag_inprocess(fresh_store):
+    from web import aggregator
+    fresh_store.create_instance("alpha", display_name="Alpha")
+    # delete succeeds and reports the now-active instance
+    res = aggregator.delete_rag_instance("alpha")
+    assert res["ok"] and res["data"]["deleted"] == "alpha"
+    assert res["data"]["active"] == "default"
+    assert res["data"]["active_display_name"] == "Example RAG"
+    names = {i["name"] for i in aggregator.get_rag_instances()["instances"]}
+    assert "alpha" not in names
+    # guards: default / none / unknown are rejected, never silently dropped
+    assert aggregator.delete_rag_instance("default")["status"] == 422
+    assert aggregator.delete_rag_instance("none")["status"] == 422
+    assert aggregator.delete_rag_instance("")["status"] == 400
+    assert aggregator.delete_rag_instance("ghost")["status"] == 422
+
+
 def test_aiar_system_prompt_inprocess():
     from web import aggregator
     from aiar.harness import pipeline
@@ -603,6 +677,19 @@ def test_aiar_settings_parity():
         assert path in js
     # escapeHtml + no-store idiom (matches the AIAR static page idiom)
     assert "escapeHtml" in js and "no-store" in js
+
+
+def test_aiar_simulate_page_parity():
+    """Simulate page: 'Prompt Console' heading, no stale description sentence,
+    and an LLM-judging toggle wired into the simulate payload."""
+    from pathlib import Path
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
+    html = (static / "index.html").read_text()
+    js = (static / "app.js").read_text()
+    assert "Prompt Console" in html
+    assert "answered by your Qwen model, then judged" not in html
+    assert 'id="judge"' in html
+    assert '$("judge").checked' in js
 
 
 def test_aiar_nav_pill_added_all_pages():

@@ -99,7 +99,8 @@ def _rag_state(event: Dict[str, Any]) -> Optional[str]:
 # --------------------------------------------------------------------------
 
 def simulate_prompt(prompt: str, *, rag: bool = True, think: bool = False,
-                    reground: bool = False, instance: Optional[str] = None,
+                    reground: bool = False, judge: bool = True,
+                    instance: Optional[str] = None,
                     model: Optional[str] = None,
                     system: Optional[str] = None) -> Dict[str, Any]:
     """Run ``prompt`` through the harness and return the answer + verdict.
@@ -107,10 +108,11 @@ def simulate_prompt(prompt: str, *, rag: bool = True, think: bool = False,
     The harness logs the call to the observer, so the returned ``call_id`` is
     immediately markable for evaluation. ``instance``/``model``/``system`` are
     passed straight through as per-request overrides (None -> the active
-    instance/model/system prompt).
+    instance/model/system prompt). ``judge=False`` skips the LLM-as-judge so the
+    result carries no verdict (the page renders 'judge: skipped').
     """
     from aiar.harness import answer_prompt
-    result = answer_prompt(prompt, rag=rag, judge=True, think=think,
+    result = answer_prompt(prompt, rag=rag, judge=judge, think=think,
                            reground=True if reground else None,
                            instance=instance, model=model, system=system)
     result["prompt"] = prompt
@@ -206,6 +208,38 @@ def set_active_rag(name: str) -> Dict[str, Any]:
     return {"ok": True, "status": 200,
             "data": {"active": name,
                       "active_display_name": desc.display_name if desc else name}}
+
+
+def delete_rag_instance(name: str) -> Dict[str, Any]:
+    """Delete a RAG instance (its collection + registry entry). The ``default``
+    instance and the ``none`` sentinel are not deletable. On success returns the
+    now-active instance so the caller can refresh the dropdown."""
+    from aiar.rag import store
+    name = (name or "").strip()
+    if not name:
+        return {"ok": False, "status": 400, "error": "missing_name"}
+    if name == "none":
+        return {"ok": False, "status": 422, "error": "cannot_delete_none"}
+    if not store.is_ready():
+        try:
+            store.init()
+        except Exception:
+            pass
+    try:
+        result = store.delete_instance(name)
+    except ValueError as exc:
+        return {"ok": False, "status": 422, "error": "delete_failed", "data": str(exc)}
+    except RuntimeError as exc:
+        return {"ok": False, "status": 503, "error": "store_unavailable", "data": str(exc)}
+    active = result.get("active")
+    if active == "none":
+        active_display_name = "No RAG"
+    else:
+        desc = store.descriptor(active)
+        active_display_name = desc.display_name if desc else active
+    return {"ok": True, "status": 200,
+            "data": {"deleted": result.get("deleted"), "active": active,
+                     "active_display_name": active_display_name}}
 
 
 def get_system_prompt() -> Dict[str, Any]:
