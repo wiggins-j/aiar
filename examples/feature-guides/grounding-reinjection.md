@@ -35,10 +35,22 @@ Note: even with the global flag off, the GUI **Reground** checkbox and the CLI
    ```bash
    export GROUNDING_REINJECTION_ENABLED=1
    ```
-2. Create a correction to test it (GUI is easiest):
-   - On **Simulate**, ask a prompt the model gets wrong; **Mark for evaluation**.
-   - On the **Evaluation queue**, score it low, write the correct answer, then
-     **Submit + Reground**.
+2. Create a correction to test it. **GUI:** on **Simulate** ask a prompt the model
+   gets wrong, **Mark for evaluation**; on the **Evaluation queue** score it low,
+   write the correct answer, **Submit + Reground**.
+
+   **Headless / CLI (no browser):** there is no standalone grounding CLI, so use the
+   watcher's JSON API (`python -m web.server`, then `curl` — no browser needed):
+   ```bash
+   # a) run the prompt and note the printed call_id (or use --json)
+   python -m aiar.harness "the prompt the model gets wrong" --no-rag
+   # b) queue that call, then submit the verdict + correction
+   curl -s -X POST http://127.0.0.1:8088/api/activity/evaluate \
+     -H 'Content-Type: application/json' -d '{"call_id":"<call_id>"}'
+   curl -s -X POST http://127.0.0.1:8088/api/evaluation/verdict \
+     -H 'Content-Type: application/json' \
+     -d '{"call_id":"<call_id>","score":3,"correction":"what it should say"}'
+   ```
 3. Verify it sticks — re-ask the **same** prompt:
    ```bash
    python -m aiar.harness "the same prompt" --reground

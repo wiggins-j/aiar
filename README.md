@@ -295,6 +295,10 @@ Tell me I can either:
 Recommend the **reranker + hybrid** as the highest-impact pair to start, and remind
 me to MEASURE each change on my own corpus
 (`examples/feature-guides/measure-lift.md`) rather than trusting defaults.
+Every method is **CLI-first** — env vars plus `python -m aiar.harness` /
+`python -m aiar.eval.runner`; the one browser-optional step (recording a grounding
+correction) also has a `curl` path via the watcher API — so a headless/SSH user can
+do all of this from the command line, no GUI required.
 ````
 
 ---

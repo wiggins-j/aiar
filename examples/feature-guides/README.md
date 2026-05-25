@@ -36,3 +36,10 @@ README, STEP 0 and the NEXT STEPS section).
 
 > Order of the pipeline: `query → (rewrite/HyDE) → retrieve (hybrid | vector) →
 > (rerank) → top-K → context`. Each stage is independent and off by default.
+
+**CLI / headless note.** Every method here is command-line first: each is an env var
+(set it in your shell or `config.example`), and you verify with `python -m
+aiar.harness` and `python -m aiar.eval.runner`. The only browser-optional step —
+recording a grounding correction — also has a `curl` path via the watcher API (see
+[`grounding-reinjection.md`](grounding-reinjection.md)), so an SSH-only user can do
+everything without a GUI.
