@@ -12,8 +12,13 @@ Each guide below is **dual-purpose**:
   matching file and follows its **Set it up** steps (set env vars → first-run
   note → re-run the harness → measure the lift → persist the setting).
 
+**New here?** Start with the roadmap — [`improving-rag.md`](improving-rag.md) — which
+ranks every improvement by ROI (sources → parsing → metadata → chunking → retrieval
+→ answer discipline → eval) and points to the per-method guides below.
+
 | Method | File | Ask / say |
 |---|---|---|
+| **Roadmap: improving your RAG** | [`improving-rag.md`](improving-rag.md) | "How do I improve my RAG?" |
 | Hybrid retrieval (vector + BM25) | [`hybrid-retrieval.md`](hybrid-retrieval.md) | "What is hybrid retrieval?" / "Set up hybrid retrieval" |
 | Cross-encoder reranker | [`reranker.md`](reranker.md) | "What is the reranker?" / "Set up the reranker" |
 | Query rewrite / HyDE | [`query-rewrite-hyde.md`](query-rewrite-hyde.md) | "What is HyDE?" / "Set up query rewrite" |

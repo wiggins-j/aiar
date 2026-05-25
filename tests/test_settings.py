@@ -773,7 +773,7 @@ def test_aiar_feature_guides_present():
     guides = root / "examples" / "feature-guides"
     for name in ("README.md", "reranker.md", "hybrid-retrieval.md",
                  "query-rewrite-hyde.md", "grounding-reinjection.md", "top-k.md",
-                 "measure-lift.md"):
+                 "measure-lift.md", "improving-rag.md"):
         assert (guides / name).exists(), f"missing feature guide {name}"
     readme = (root / "README.md").read_text()
     assert "NEXT STEPS" in readme and "examples/feature-guides/" in readme
