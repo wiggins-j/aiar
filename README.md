@@ -43,7 +43,7 @@ If you also want the optional FastAPI harness service:
 pip install -e '.[rag,service]'
 ```
 
-After pulling a local Qwen model with Ollama and setting `OLLAMA_MODEL`, run:
+After pulling a local Ollama-served model and setting `OLLAMA_MODEL`, run:
 
 ```bash
 aiar-doctor
@@ -78,10 +78,13 @@ few simple questions (each with a recommended default you can just accept).
 
 ````text
 You are setting up AIAR ("Artificial Intelligence and RAG") for me on my machine — a small,
-open-source, model-agnostic framework for building AND EVALUATING a
-retrieval-augmented (RAG) assistant over MY OWN documents, using ANY Qwen model
-served locally by Ollama. The full loop is: ingest my docs → retrieve →
-answer with Qwen (grounded) → judge the answer 1–10 with a reason → let me
+open-source framework for building AND EVALUATING a retrieval-augmented (RAG)
+assistant over MY OWN documents, using a local model served by Ollama. AIAR is
+currently **Ollama-only** as an LLM backend. The docs and defaults are
+**Qwen-first** because that is the primary tested path, but the code can use
+other Ollama-hosted models too if I choose one explicitly. The full loop is:
+ingest my docs → retrieve → answer (grounded) → judge the answer 1–10 with a
+reason → let me
 correct it → "reground" so the next answer is fixed. License is Apache-2.0; do
 not change the project's code or behavior — only set it up and run it.
 
@@ -140,7 +143,9 @@ exact names) — AIAR is entirely environment-driven.
                 (Apple Silicon shares ONE "unified memory" pool = your RAM)
      • Windows: `systeminfo | findstr /C:"Total Physical Memory"` ; `nvidia-smi` ; `Get-PSDrive C`
    Then I'll recommend the LARGEST Qwen that fits, from the table below, and set
-   OLLAMA_MODEL to a tag that actually exists for your Ollama. ANY Qwen works.
+   OLLAMA_MODEL to a tag that actually exists for your Ollama. Qwen is the
+   recommended default, but if I explicitly prefer another Ollama-hosted model,
+   allow that too.
 
    Qwen size → hardware (rough, Q4_K_M quant — VERIFY exact + newest at the URLs below):
      ~1.5B   `qwen2.5:1.5b`              ~2 GB RAM  / ~2 GB VRAM   tiny boxes, smoke tests
@@ -234,8 +239,9 @@ reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
 - Confirm I have enough free disk/RAM/VRAM for the model chosen in STEP 0 (use
   the size→hardware table). If it won't fit, recommend the next tier down.
 
-=== STEP 2: Pull the Qwen model ===
-`ollama pull <my model>` (model-agnostic — whatever I chose). Verify with
+=== STEP 2: Pull the model ===
+`ollama pull <my model>` (Qwen recommended; other Ollama-hosted models allowed if
+I chose one explicitly). Verify with
 `ollama list`.
 
 === STEP 3: Install AIAR ===
@@ -402,9 +408,10 @@ do all of this from the command line, no GUI required.
 
 # AIAR — Artificial Intelligence and RAG
 
-A small, open-source, **model-agnostic** framework for building and *evaluating*
-a retrieval-augmented (RAG) assistant on **your own documents**, using **any
-Qwen model via [Ollama](https://ollama.com)**.
+A small, open-source framework for building and *evaluating* a
+retrieval-augmented (RAG) assistant on **your own documents**, using a **local
+model served via [Ollama](https://ollama.com)**. The docs and defaults are
+**Qwen-first**, but the runtime can point at other Ollama models too.
 
 AIAR gives you the full loop in one repo:
 
@@ -413,7 +420,8 @@ AIAR gives you the full loop in one repo:
 2. **Retrieve** with a real pipeline — dense vector search, optional **hybrid**
    (vector + BM25), optional **cross-encoder reranking**, optional query
    rewrite / HyDE.
-3. **Answer** a prompt with your Qwen model, grounded in the retrieved context.
+3. **Answer** a prompt with your local Ollama-served model, grounded in the
+   retrieved context.
 4. **Judge** the answer with an LLM-as-judge (rating + reason + confidence).
 5. **Simulate / evaluate / reground** through a web GUI: run a prompt, see the
    response, mark it, score it 1–10 with a correction, then click **Submit +
@@ -438,7 +446,7 @@ flowchart LR
     STORE --> RET
     GND[("Grounding store<br/>past corrections")] -- reground --> CTX["Context<br/>(chunks + corrections)"]
     RET --> CTX
-    CTX --> HAR["Harness: answer_prompt<br/>answer with any Qwen via Ollama"]
+    CTX --> HAR["Harness: answer_prompt<br/>answer with any Ollama-served model"]
     HAR --> ANS(["Answer"])
     ANS --> JUDGE["LLM-as-judge<br/>rating + reason + confidence"]
     JUDGE --> GUI["Watcher GUI / CLI<br/>Simulate · Activity · Evaluation"]
@@ -453,7 +461,8 @@ flowchart LR
 - **Ingest** is offline: your docs → chunks → embeddings in ChromaDB (one or many
   named **RAG instances**; "No RAG" is also selectable).
 - **Answer time** retrieves (optionally hybrid + reranked + rewritten), prepends any
-  prior **grounding** corrections, answers with your Qwen model, then **judges** it.
+  prior **grounding** corrections, answers with your local Ollama-served model,
+  then **judges** it.
 - The **GUI/CLI** closes the loop: a low score + correction is written back to the
   grounding store, so the next answer to that prompt is fixed (**reground**).
 - **Settings** swaps the active model, RAG instance, and harness system prompt live.
@@ -469,7 +478,7 @@ the answer better*, and *closing the loop* when they didn't.
 | Package | What it is |
 |---|---|
 | `aiar/rag` | `ingest` (folder → chunks), `store` (ChromaDB), `retriever` (`get_context`), `lexical` (BM25), `fusion` (RRF), `reranker` (cross-encoder), `query_rewrite` (HyDE) |
-| `aiar/llm` | `call_ollama` — the only thing that talks to Ollama; model-agnostic |
+| `aiar/llm` | `call_ollama` — the only LLM backend today; AIAR is Ollama-only right now |
 | `aiar/eval` | `judge` (LLM-as-judge), `scorer` (deterministic rubric), `runner` (RAG-on vs RAG-off A/B) |
 | `aiar/grounding` | `store` (corrections keyed by prompt signature), `reinject` (render corrections into the next prompt) |
 | `aiar/harness` | `pipeline.answer_prompt` (prompt → retrieve → reground → answer → judge), a CLI, and an optional FastAPI `service` |
@@ -497,7 +506,8 @@ that means `python3`; on Windows it is often `py`. The examples below use
 `python` generically.
 
 ```bash
-# 1. Pull any Qwen model with Ollama. Pick a tag sized to your hardware; verify
+# 1. Pull an Ollama model. Qwen is the recommended and primary tested path; other
+#    Ollama-hosted models can work too if you set OLLAMA_MODEL explicitly. Verify
 #    it's pullable at https://ollama.com/library/qwen
 #    (specs / collections: https://huggingface.co/Qwen ,
 #     https://huggingface.co/collections/Qwen/qwen35 ,
@@ -605,12 +615,13 @@ vector retrieval — turn them on to trade a little latency for relevance.
 - **OS-agnostic** — Linux (incl. Ubuntu LTS servers), macOS, and Windows. Pure
   Python + `pathlib`; no shell scripts or platform-specific code.
 - Python 3.10–3.14
-- [Ollama](https://ollama.com) running locally with any Qwen model pulled. Pick a
-  model sized to your hardware — tags at <https://ollama.com/library/qwen>, specs
-  at <https://huggingface.co/Qwen>, with newer family collections at
-  <https://huggingface.co/collections/Qwen/qwen35> and
-  <https://huggingface.co/collections/Qwen/qwen36> (always check these for the
-  latest models).
+- [Ollama](https://ollama.com) running locally with a model pulled. Qwen is the
+  recommended and primary tested path, so the docs point at Qwen tags and sizing
+  guidance: <https://ollama.com/library/qwen>, <https://huggingface.co/Qwen>,
+  <https://huggingface.co/collections/Qwen/qwen35>, and
+  <https://huggingface.co/collections/Qwen/qwen36>. Other Ollama-hosted models are
+  possible if you set `OLLAMA_MODEL` explicitly, but they are not the main
+  documented path today.
 - Preferred install: `pip install -e '.[rag]'`. Equivalent fallback:
   `pip install -r requirements.txt -r requirements-rag.txt`. The RAG stack is
   optional: without it the store is unavailable and the harness answers from the
