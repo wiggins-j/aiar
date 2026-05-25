@@ -18,10 +18,11 @@ env/
 corpus/
 
 # Local-only demo / recording scripts + private collections — never published
-# (name any private brief/schema/corpus files *.local.md / *.local.json)
+# (name any private brief/schema/corpus/collector files *.local.md / .json / .py)
 DEMO_RECORDING.md
 *.local.md
 *.local.json
+*.local.py
 
 # Test / tooling
 .pytest_cache/
