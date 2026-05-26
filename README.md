@@ -86,6 +86,7 @@ and only listed likely base-code sections it would need to inspect.
 
 That is a reasonable safety behavior, but it still does not answer the user's
 actual question.
+<img width="1658" height="1236" alt="image" src="https://github.com/user-attachments/assets/e7ee67ae-a510-45f5-a48f-bcc533166cbe" />
 
 **AIAR with a proper local corpus**
 
@@ -96,6 +97,8 @@ amended sections directly from the local corpus:
 - `R403.1.4.1 Frost protection` for foundations, including the amended methods
   and exceptions
 - `R507.3.3 Frost protection` for decks, including the deck-footing methods
+<img width="2144" height="1382" alt="image" src="https://github.com/user-attachments/assets/69fefde6-1bb8-4c18-a49b-5892dd4a673f" />
+<img width="2110" height="1040" alt="image" src="https://github.com/user-attachments/assets/6e4f333b-f3f5-432e-81ef-f2e777133f46" />
 
 That is the point of AIAR:
 
