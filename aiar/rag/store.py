@@ -96,7 +96,6 @@ def init() -> None:
     try:
         import chromadb
         from chromadb.config import Settings as _ChromaSettings
-        from sentence_transformers import SentenceTransformer
 
         db_path = _db_path()
         Path(db_path).mkdir(parents=True, exist_ok=True)
@@ -104,7 +103,6 @@ def init() -> None:
         # emits a noisy capture() error on some versions). Privacy + clean output.
         _client = chromadb.PersistentClient(
             path=db_path, settings=_ChromaSettings(anonymized_telemetry=False))
-        _embedder = SentenceTransformer(_embedding_model())
         _collections = {}
         _registry = instances.Registry(
             _base_dir(), default_collection=_default_collection())
@@ -116,6 +114,24 @@ def init() -> None:
     except Exception as exc:
         logger.error("store: init failed — running without RAG: %s", exc)
         _available = False
+
+
+def _ensure_embedder() -> bool:
+    """Lazy-load the shared embedder only when a read/write needs embeddings."""
+    global _embedder
+    if _embedder is not None:
+        return True
+    if not _available:
+        init()
+    if not _available:
+        return False
+    try:
+        from sentence_transformers import SentenceTransformer
+        _embedder = SentenceTransformer(_embedding_model())
+        return True
+    except Exception as exc:
+        logger.error("store: embedder init failed — running without RAG queries: %s", exc)
+        return False
 
 
 def _self_heal() -> None:
@@ -136,8 +152,13 @@ def _self_heal() -> None:
 
 def _resolve_boot_active() -> str:
     env = os.environ.get("RAG_INSTANCE")
-    if env and _registry is not None and _registry.exists(env):
-        return env
+    if env and _registry is not None:
+        try:
+            resolved = _registry.resolve(env)
+        except ValueError:
+            resolved = None
+        if resolved:
+            return resolved
     return instances.DEFAULT_INSTANCE
 
 
@@ -151,6 +172,30 @@ def _resolve(instance: Optional[str]) -> str:
     if env:
         return env
     return instances.DEFAULT_INSTANCE
+
+
+def _canonical_existing(name: str) -> str:
+    """Resolve an existing instance name/display name to its canonical slug."""
+    _sync_registry()
+    if _registry is None:
+        init()
+    if _registry is None:
+        raise RuntimeError("store unavailable")
+    resolved = _registry.resolve(name)
+    if resolved is None:
+        raise ValueError(f"unknown instance: {name!r}")
+    return resolved
+
+
+def _sync_registry() -> None:
+    """Reload registry state written by other AIAR processes."""
+    if _registry is None:
+        return
+    try:
+        _registry.reload()
+        _self_heal()
+    except Exception as exc:
+        logger.debug("store: registry sync failed: %s", exc)
 
 
 # "No RAG" sentinel — when the active instance is this, instance-less reads
@@ -167,17 +212,25 @@ def _handle(instance: Optional[str]):
     """
     if not _available or _client is None or _registry is None:
         return None
-    name = _resolve(instance)
-    if name == NO_RAG:
+    _sync_registry()
+    raw = _resolve(instance)
+    if raw == NO_RAG:
         return None
-    if name in _collections:
-        return _collections[name]
-    desc = _registry.get(name)
+    try:
+        resolved = _registry.resolve(raw)
+    except ValueError:
+        resolved = None
+    if resolved and resolved in _collections:
+        return _collections[resolved]
+    desc = _registry.get(resolved) if resolved else None
     if desc is None:
-        desc = _registry.create(name)
+        desc = _registry.create(raw)
+    resolved = desc.name
+    if resolved in _collections:
+        return _collections[resolved]
     col = _client.get_or_create_collection(
         name=desc.collection, metadata={"hnsw:space": "cosine"})
-    _collections[name] = col
+    _collections[resolved] = col
     return col
 
 
@@ -192,6 +245,7 @@ def create_instance(name: str, *, display_name: Optional[str] = None,
         init()
     if _registry is None:
         raise RuntimeError("store unavailable")
+    _sync_registry()
     desc = _registry.create(name, display_name=display_name,
                             query_rewrite=query_rewrite, rerank_model=rerank_model)
     _handle(desc.name)  # open the collection so chunk_count is queryable
@@ -200,8 +254,10 @@ def create_instance(name: str, *, display_name: Optional[str] = None,
 
 def publish_instance(name: str) -> None:
     if _registry is None:
+        init()
+    if _registry is None:
         raise RuntimeError("store unavailable")
-    _registry.publish(name)
+    _registry.publish(_canonical_existing(name))
 
 
 def delete_instance(name: str) -> dict:
@@ -215,9 +271,10 @@ def delete_instance(name: str) -> dict:
         init()
     if not _available or _client is None or _registry is None:
         raise RuntimeError("store unavailable")
-    name = (name or "").strip()
-    if not name or name == NO_RAG:
-        raise ValueError(f"cannot delete: {name!r}")
+    raw = (name or "").strip()
+    if not raw or raw == NO_RAG:
+        raise ValueError(f"cannot delete: {raw!r}")
+    name = _canonical_existing(raw)
     if name == instances.DEFAULT_INSTANCE:
         raise ValueError("cannot delete the default instance")
     desc = _registry.get(name)
@@ -257,9 +314,7 @@ def set_active(name: str) -> None:
     if name == NO_RAG:
         _active = NO_RAG
         return
-    if _registry is None or not _registry.exists(name):
-        raise ValueError(f"unknown instance: {name!r}")
-    _active = name
+    _active = _canonical_existing(name)
 
 
 def set_active_none() -> None:
@@ -277,6 +332,7 @@ def descriptor(instance: Optional[str] = None):
     """Return the InstanceDescriptor for the resolved instance, or None."""
     if _registry is None:
         return None
+    _sync_registry()
     return _registry.get(_resolve(instance))
 
 
@@ -285,6 +341,7 @@ def list_instances() -> List[dict]:
     registered instance (self-healed). The Settings dropdown source."""
     if _registry is None:
         return []
+    _sync_registry()
     active = active_instance()
     out: List[dict] = []
     for desc in _registry.all():
@@ -296,6 +353,39 @@ def list_instances() -> List[dict]:
             "active": desc.name == active,
         })
     return out
+
+
+def health(*, instance: Optional[str] = None) -> dict:
+    """Cheap health snapshot for watcher/service endpoints.
+
+    Deliberately avoids loading the embedder so HTTP health/readiness checks stay
+    lightweight on fresh or headless installs.
+    """
+    if _registry is None and not _available:
+        init()
+    _sync_registry()
+    active = active_instance()
+    target = _resolve(instance) if instance is not None else active
+    if _registry is not None:
+        try:
+            canonical = _registry.resolve(target) or target
+        except ValueError:
+            canonical = target
+        instance_names = _registry.names()
+    else:
+        canonical = target
+        instance_names = []
+    return {
+        "store_ready": _available and _client is not None and _registry is not None,
+        "embedder_ready": _embedder is not None,
+        "db_path": _db_path(),
+        "embedding_model": _embedding_model(),
+        "active_instance": active,
+        "resolved_instance": canonical,
+        "instance_count": len(instance_names),
+        "instances": instance_names,
+        "chunk_count": chunk_count(instance=canonical) if _available else None,
+    }
 
 
 # --- reads / writes (instance-aware) ---------------------------------------
@@ -310,6 +400,8 @@ def add(chunks: List[Chunk], *, instance: str) -> int:
     Returns count added. ``instance`` is REQUIRED (write isolation). Large
     ingests are written in batches so a corpus over ChromaDB's per-call cap
     (~5461 items) does not fail."""
+    if not _ensure_embedder():
+        return 0
     col = _handle(instance)
     if col is None or not chunks:
         return 0
@@ -376,6 +468,8 @@ def query_scored(
     ``where`` is an optional ChromaDB metadata filter. Returns [] if the store
     is unavailable, the collection is empty, or the query raises.
     """
+    if not _ensure_embedder():
+        return []
     col = _handle(instance)
     if col is None:
         return []

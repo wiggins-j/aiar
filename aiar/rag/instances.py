@@ -116,6 +116,7 @@ class Registry:
         return self._path
 
     def _load(self) -> None:
+        self._entries = {}
         try:
             with open(self._path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -126,6 +127,11 @@ class Registry:
         except (OSError, ValueError):
             self._entries = {}
         self._ensure_default()
+
+    def reload(self) -> None:
+        """Re-read registry.json so long-running processes see other writers."""
+        with self._lock:
+            self._load()
 
     def _ensure_default(self) -> None:
         if DEFAULT_INSTANCE not in self._entries:
@@ -156,6 +162,32 @@ class Registry:
 
     def exists(self, name: str) -> bool:
         return name in self._entries
+
+    def resolve(self, name: str) -> Optional[str]:
+        """Resolve ``name`` to a canonical instance slug.
+
+        Accepts:
+        - exact stored slug
+        - a free-form string that slugifies to an existing slug
+        - a unique display name match (case-insensitive)
+        """
+        raw = (name or "").strip()
+        if not raw:
+            return None
+        if raw in self._entries:
+            return raw
+        slug = slugify(raw)
+        if slug in self._entries:
+            return slug
+        matches = [
+            desc.name for desc in self._entries.values()
+            if desc.display_name.strip().casefold() == raw.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(f"ambiguous instance display name: {raw!r}")
+        return None
 
     def names(self) -> List[str]:
         return list(self._entries.keys())

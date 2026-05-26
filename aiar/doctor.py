@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
-_RAG_MODULES = ("chromadb", "sentence_transformers", "rank_bm25")
+_RAG_MODULES = ("chromadb", "sentence_transformers", "rank_bm25", "pypdf")
 _CORE_MODULES = ("requests",)
 _PASS = "pass"
 _WARN = "warn"

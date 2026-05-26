@@ -100,6 +100,20 @@ def test_aiar_ingest_publishes_instance(fresh_store, tmp_path):
     assert rows["pubtest"]["status"] == "published"
 
 
+def test_aiar_ingest_cli_canonicalizes_display_name_instance(fresh_store, tmp_path):
+    """Passing a human-readable ``--instance`` name must write to the canonical
+    slugged instance and preserve the display name."""
+    from aiar.rag import ingest as ingest_mod
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "n.md").write_text("display-name instance test " * 30, encoding="utf-8")
+    assert ingest_mod.main([str(docs), "--instance", "TESLA RAG"]) == 0
+    rows = {r["name"]: r for r in fresh_store.list_instances()}
+    assert "tesla-rag" in rows
+    assert rows["tesla-rag"]["status"] == "published"
+    assert fresh_store.descriptor("tesla-rag").display_name == "TESLA RAG"
+
+
 def test_aiar_add_batches_over_cap(fresh_store, monkeypatch):
     """store.add() writes in batches so an ingest larger than ChromaDB's per-call
     cap succeeds (regression: a single add() of >5461 chunks used to fail)."""
@@ -201,6 +215,12 @@ def test_aiar_set_active_toggle(fresh_store):
     assert fresh_store.active_instance() == "default"
 
 
+def test_aiar_set_active_accepts_display_name(fresh_store):
+    fresh_store.create_instance("tesla-rag", display_name="TESLA RAG")
+    fresh_store.set_active("TESLA RAG")
+    assert fresh_store.active_instance() == "tesla-rag"
+
+
 def test_aiar_set_active_rejects_unknown(fresh_store):
     with pytest.raises(ValueError):
         fresh_store.set_active("does-not-exist")
@@ -242,6 +262,16 @@ def test_aiar_delete_instance_guards(fresh_store):
         fresh_store.delete_instance("does-not-exist")
 
 
+def test_aiar_store_health_is_lightweight_before_queries(fresh_store):
+    """A fresh watcher/service health probe should not require loading the
+    embedding model just to list instances or chunk counts."""
+    snap = fresh_store.health()
+    assert snap["store_ready"] is True
+    assert snap["embedder_ready"] is False
+    assert snap["active_instance"] == "default"
+    assert snap["chunk_count"] == 0
+
+
 def test_aiar_delete_instance_cleans_grounding(fresh_store, tmp_path, monkeypatch):
     """A full delete also purges the instance's own grounding corrections subdir,
     while the shared grounding root and global (flat) corrections survive."""
@@ -278,6 +308,17 @@ def test_aiar_registry_persists_and_self_heals(fresh_store, tmp_path):
     fresh_store.reset_for_testing(base=tmp_path)
     names = {r["name"] for r in fresh_store.list_instances()}
     assert "orphan" in names
+
+
+def test_aiar_registry_reload_sees_other_process_writes(fresh_store, tmp_path):
+    """Long-running watcher/service processes should pick up instances created by
+    another AIAR process without requiring a restart."""
+    from aiar.rag import instances as rag_instances
+    fresh_store.create_instance("alpha", display_name="Alpha")
+    other = rag_instances.Registry(tmp_path, default_collection="aiar")
+    other.create("beta-rag", display_name="Beta RAG")
+    names = {r["name"] for r in fresh_store.list_instances()}
+    assert {"alpha", "beta-rag"} <= names
 
 
 def test_aiar_default_instance_label_migrates_from_legacy_default(tmp_path):
@@ -375,6 +416,16 @@ def test_aiar_query_rewrite_uses_active_instance_prompts(fresh_store, monkeypatc
     out = query_rewrite.transform("what can i take")
     assert out == "rewritten query"
     assert captured["system"] == "HEALTH REWRITE PROMPT"
+
+
+def test_aiar_ingest_supports_pdf(monkeypatch, tmp_path):
+    from aiar.rag import ingest as ingest_mod
+    pdf = tmp_path / "policy.pdf"
+    pdf.write_bytes(b"%PDF-pretend")
+    monkeypatch.setattr(ingest_mod, "_pdf_to_text", lambda path: "PDF extracted text about permit rules")
+    chunks = ingest_mod.ingest_file(pdf)
+    assert chunks
+    assert "PDF extracted text" in chunks[0].text
 
 
 # ===========================================================================

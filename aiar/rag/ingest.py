@@ -6,6 +6,7 @@ embedding. Supported file types:
 
   * ``.txt`` / ``.md`` / ``.markdown`` / ``.rst``  — treated as plain text
   * ``.json``                                       — see :func:`_json_to_text`
+  * ``.pdf``                                        — extracted with ``pypdf``
 
 There is NO web-fetching and NO site-specific HTML parsing here — point it at
 your own files. (If you want to ingest a website, fetch it to ``.txt``/``.md``
@@ -35,7 +36,8 @@ _CHUNK_OVERLAP_CHARS = 200
 
 _TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".rst", ".text"}
 _JSON_SUFFIXES = {".json"}
-SUPPORTED_SUFFIXES = _TEXT_SUFFIXES | _JSON_SUFFIXES
+_PDF_SUFFIXES = {".pdf"}
+SUPPORTED_SUFFIXES = _TEXT_SUFFIXES | _JSON_SUFFIXES | _PDF_SUFFIXES
 
 
 @dataclass
@@ -78,6 +80,26 @@ def _json_to_text(raw: str) -> str:
     return render(data)
 
 
+def _pdf_to_text(path: Path) -> str:
+    """Extract text from a PDF with pypdf. Returns ``""`` on extraction errors."""
+    try:
+        from pypdf import PdfReader
+    except Exception as exc:
+        logger.warning("ingest: could not read PDF %s (missing pypdf): %s", path, exc)
+        return ""
+    try:
+        reader = PdfReader(str(path))
+        parts: List[str] = []
+        for idx, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            if text:
+                parts.append(f"[Page {idx}]\n{text}")
+        return "\n\n".join(parts).strip()
+    except Exception as exc:
+        logger.warning("ingest: could not extract PDF %s: %s", path, exc)
+        return ""
+
+
 def _chunk_text(source: str, title: str, text: str, category: str,
                 metadata: "Dict[str, object] | None" = None) -> List[Chunk]:
     """Split text into overlapping chunks on paragraph boundaries."""
@@ -110,13 +132,16 @@ def _chunk_text(source: str, title: str, text: str, category: str,
 
 def ingest_file(path: Path, *, category: str = "general") -> List[Chunk]:
     """Read one document and return its chunks. Returns [] on any error."""
-    try:
-        raw = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as exc:
-        logger.warning("ingest: could not read %s: %s", path, exc)
-        return []
     front_matter = {}
-    body = raw
+    body = ""
+    raw = ""
+    if path.suffix.lower() not in _PDF_SUFFIXES:
+        try:
+            raw = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            logger.warning("ingest: could not read %s: %s", path, exc)
+            return []
+        body = raw
     if path.suffix.lower() in _TEXT_SUFFIXES:
         try:
             from aiar.rag import metadata as rag_metadata
@@ -125,8 +150,12 @@ def ingest_file(path: Path, *, category: str = "general") -> List[Chunk]:
             front_matter, body = {}, raw
     if path.suffix.lower() in _JSON_SUFFIXES:
         text = _json_to_text(raw)
+    elif path.suffix.lower() in _PDF_SUFFIXES:
+        text = _pdf_to_text(path)
     else:
         text = body
+    if not text.strip():
+        return []
     doc_meta = dict(front_matter)
     doc_meta["document_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
     return _chunk_text(str(path), path.stem, text, category, metadata=doc_meta)
@@ -171,7 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m aiar.rag.ingest",
         description="Ingest a folder of documents into the AIAR RAG store.",
     )
-    parser.add_argument("folder", help="Path to a folder of .txt/.md/.json documents")
+    parser.add_argument("folder", help="Path to a folder of .txt/.md/.json/.pdf documents")
     parser.add_argument("--category", default="general",
                         help="Free-form metadata tag for the chunks (default: general)")
     parser.add_argument("--instance", default=None,
@@ -224,7 +253,10 @@ def main(argv=None) -> int:
         return 0
     from aiar.rag import store
     store.init()
-    instance = args.instance or store.active_instance()
+    if args.instance:
+        instance = store.create_instance(args.instance, display_name=args.instance)
+    else:
+        instance = store.active_instance()
     if instance == store.NO_RAG:
         print(f"error: cannot ingest into the No-RAG instance ({store.NO_RAG!r}); "
               f"pick a real instance with --instance or RAG_INSTANCE",

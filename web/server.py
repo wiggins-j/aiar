@@ -131,8 +131,19 @@ class WatcherHandler(BaseHTTPRequestHandler):
             self._serve_json(HTTPStatus.OK, list_system_prompts())
             return
         if path == "/healthz":
-            self._serve_json(HTTPStatus.OK,
-                             {"status": "ok", "generated_at": iso_now(), "service": "aiar-watcher"})
+            from aiar.llm import active_model, healthcheck
+            from aiar.rag import store
+            rag = store.health()
+            ollama_ok = healthcheck()
+            payload = {
+                "status": "ok" if ollama_ok and rag.get("store_ready") else "degraded",
+                "generated_at": iso_now(),
+                "service": "aiar-watcher",
+                "ollama_reachable": ollama_ok,
+                "active_model": active_model(),
+                "rag": rag,
+            }
+            self._serve_json(HTTPStatus.OK, payload)
             return
         self._serve_json(HTTPStatus.NOT_FOUND, {"error": "not_found", "path": self.path})
 

@@ -141,7 +141,7 @@ source config.example      # then edit the exports to taste
 ## 3. Ingest YOUR documents into a RAG
 
 Put your documents in a folder. Supported types: `.txt`, `.md`, `.markdown`,
-`.rst`, `.json`. (AIAR ships a tiny example corpus in `examples/docs`.)
+`.rst`, `.json`, `.pdf`. (AIAR ships a tiny example corpus in `examples/docs`.)
 
 > **Run ingest on the machine that hosts the model + AIAR store.** Ingest writes
 > embeddings into the store at `AIAR_DB_PATH` (default `~/.aiar/knowledge`) on the
@@ -168,6 +168,11 @@ instance is created on first ingest; the default instance's collection name is
 shown as **Example RAG**; CLI/API still use the slug `default`. To re-ingest
 from scratch, delete the store
 directory (`rm -rf ~/.aiar/knowledge`) and run ingest again.
+
+If a source is browser-only, login-gated, or hosted on a document portal that
+does not expose stable anonymous URLs, download/export the files manually into
+your corpus folder first and then ingest them on the machine that hosts the
+store. AIAR ingests local documents; it does not bypass access controls.
 
 ---
 
@@ -198,7 +203,7 @@ cp examples/corpus-briefs/tesla-manual-expert-collection-brief.md briefs/mydomai
 #       into your AI; it interviews you and writes the brief. Save it under briefs/.
 
 # 2. Hand briefs/mydomain-collection-brief.md to an AI collector agent. It writes
-#    clean .md/.txt/.json files (one topic/procedure each) into corpus/mydomain/.
+#    clean .md/.txt/.json/.pdf files (one topic/procedure each) into corpus/mydomain/.
 #    (corpus/ is git-ignored — large + regenerable.)
 
 # 3. Ingest the collected folder into its own instance:

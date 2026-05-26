@@ -7,7 +7,7 @@
     POST /reground {"prompt": "...", "score": 4,   -> record a correction into
                     "correction": "...", "reason",
                     "instance": "docs"}              the grounding store
-    GET  /healthz                                  -> {"ok": ..., "rag_ready": ...}
+    GET  /healthz                                  -> readiness snapshot
 
 Run with:  uvicorn aiar.harness.service:app --port 8765
 (Requires the optional ``service`` extra: ``pip install fastapi uvicorn``.)
@@ -92,5 +92,10 @@ def reground(req: RegroundRequest) -> dict:
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": healthcheck(), "rag_ready": store.is_ready(),
-            "chunk_count": store.chunk_count()}
+    rag = store.health()
+    ollama_ok = healthcheck()
+    return {
+        "ok": ollama_ok and rag.get("store_ready"),
+        "ollama_reachable": ollama_ok,
+        "rag": rag,
+    }
