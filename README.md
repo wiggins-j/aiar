@@ -69,6 +69,46 @@ instance.
 For retrieval tuning after the first demo, jump straight to the roadmap:
 [examples/feature-guides/improving-rag.md](/Users/wiggins/GitHub/aiar/examples/feature-guides/improving-rag.md).
 
+## Why RAG matters
+
+Here is one concrete example from a real local-government corpus test.
+
+Prompt:
+
+> Quote the exact amended language from the relevant sections governing frost
+> protection for both foundations (R403) and decks (R507).
+
+**Blind model / no corpus in context**
+
+A general ChatGPT run did the cautious thing: it refused to claim the exact
+Champaign amendment text without the actual local amendment document in context,
+and only listed likely base-code sections it would need to inspect.
+
+That is a reasonable safety behavior, but it still does not answer the user's
+actual question.
+
+**AIAR with a proper local corpus**
+
+The same question, asked through AIAR with `RAG ON` against a corpus built from
+the Champaign amendment PDFs and answered by `qwen3.5:9b`, returned the relevant
+amended sections directly from the local corpus:
+
+- `R403.1.4.1 Frost protection` for foundations, including the amended methods
+  and exceptions
+- `R507.3.3 Frost protection` for decks, including the deck-footing methods
+
+That is the point of AIAR:
+
+- the base model does not need to memorize one city's amendment packet
+- retrieval supplies the exact local document at answer time
+- the answer can quote the governing local text instead of guessing from the
+  generic code book
+
+This is also why AIAR includes both **RAG** and **evaluation/regrounding**. For
+high-specificity domains such as local building codes, permits, policies, SOPs,
+and internal manuals, the right question is not "is the model smart?" but "did
+the system retrieve the right source and ground the answer in it?"
+
 ## ⚡ Quick start: hand this to your AI
 
 New here? Don't read the docs — **copy the block below and paste it into any
@@ -550,7 +590,7 @@ AIAR ingests a *folder of documents*. How that folder gets populated is up to yo
 there are two supported paths:
 
 **1. Manual — you gather the documents.** Drop `.txt` / `.md` / `.markdown` / `.rst`
-/ `.json` files into a folder and ingest:
+/ `.json` / `.pdf` files into a folder and ingest:
 
 ```bash
 python -m aiar.rag.ingest /path/to/my/docs --instance my-corpus
@@ -558,7 +598,13 @@ python -m aiar.rag.ingest /path/to/my/docs --instance my-corpus
 
 (Omit `--instance` to ingest into the active built-in instance. In the GUI that
 instance is shown as **Example RAG**; in CLI/API flags its slug is still
-`default`. A new named instance is created on first ingest.)
+`default`. A new named instance is created on first ingest. If you pass a
+human-readable name such as `My Docs`, AIAR canonicalizes it to a stable slug
+for storage and preserves the display name in the watcher.)
+
+If a source is browser-only, login-gated, or served from a document portal such
+as SharePoint, export or download the files manually into the corpus folder and
+then ingest that folder. AIAR does not try to bypass access controls.
 
 **2. AI-driven — an AI builds the corpus from a brief.** Write a one-file
 **Collection Brief** that tells an AI agent (one with web + file tools) exactly

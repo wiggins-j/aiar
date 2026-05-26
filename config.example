@@ -18,6 +18,9 @@ export AIAR_CORPUS="aiar"                     # the built-in Example RAG / "defa
 export RAG_INSTANCE="default"                 # active RAG instance slug ("default" shows as "Example RAG" in the GUI; "none" = No RAG)
 export AIAR_EMBEDDING_MODEL="all-MiniLM-L6-v2"
 export RAG_TOP_K=3                            # chunks injected into the prompt
+# Ingest supports .txt/.md/.markdown/.rst/.json/.pdf. For browser-only or
+# login-gated sources, download/export the files manually into corpus/<name>/,
+# then run ingest on the machine that hosts AIAR_DB_PATH.
 
 # ---- Retrieval-quality flags (all default OFF; turn on for relevance) ------
 export RAG_HYBRID_ENABLED=0                   # vector + BM25 RRF fusion
@@ -37,3 +40,6 @@ export AIAR_BASE_DIR="$HOME/.aiar"            # eval-queue.jsonl + verdicts.json
 export AIAR_WEB_HOST="127.0.0.1"
 export AIAR_WEB_PORT=8088
 export AIAR_REASON_THRESHOLD=7                # score <= this requires a correction
+# Keep the watcher bound to loopback by default. For remote use, prefer SSH
+# forwarding, Tailscale, or another trusted private network layer instead of
+# exposing AIAR directly to the public internet.
