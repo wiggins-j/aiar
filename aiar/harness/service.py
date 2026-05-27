@@ -30,9 +30,9 @@ except Exception as exc:  # pragma: no cover - optional dependency
         "pip install fastapi uvicorn\n(original error: %s)" % exc
     )
 
-from aiar.llm import OllamaError, healthcheck
+from aiar.llm import OllamaError, active_model, healthcheck, list_models
 from aiar.rag import store
-from aiar.harness.pipeline import answer_prompt
+from aiar.harness.pipeline import ANSWER_SYSTEM_PROMPT, active_system_prompt, answer_prompt
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
@@ -137,4 +137,33 @@ def healthz() -> dict:
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
         "rag": rag,
+    }
+
+
+@app.get("/services/meta")
+def services_meta() -> dict:
+    """External-service metadata snapshot.
+
+    This is intentionally read-only and generic so sibling services can inspect
+    AIAR's model/RAG surface without depending on the watcher GUI endpoints.
+    """
+    rag = store.health()
+    instances = store.list_instances()
+    ollama_ok = healthcheck()
+    system_text = active_system_prompt()
+    return {
+        "ok": ollama_ok and rag.get("store_ready"),
+        "ollama_reachable": ollama_ok,
+        "active_model": active_model(),
+        "available_models": list_models(),
+        "rag": {
+            **rag,
+            "instances": instances,
+        },
+        "system_prompt": {
+            "has_override": system_text != ANSWER_SYSTEM_PROMPT,
+            "label": "Custom override"
+            if system_text != ANSWER_SYSTEM_PROMPT
+            else "Built-in default",
+        },
     }
