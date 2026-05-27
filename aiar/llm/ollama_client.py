@@ -22,6 +22,7 @@ import requests
 
 from aiar.observability import observer
 from aiar.observability.observer import _THINK_BLOCK_RE
+from aiar import runtime_state
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
@@ -44,7 +45,7 @@ class OllamaError(Exception):
 def active_model() -> str:
     """The model every call path resolves to when no explicit ``model=`` is
     passed. Runtime-mutable via :func:`set_active_model` (no restart)."""
-    return _active_model
+    return str(runtime_state.get("active_model") or _active_model)
 
 
 def default_model() -> str:
@@ -65,6 +66,7 @@ def set_active_model(name: str) -> None:
             f"model not installed: {name!r} (installed: {sorted(installed)})")
     global _active_model
     _active_model = name
+    runtime_state.set_value("active_model", name)
 
 
 def _model_prefixes() -> "list[str]":
@@ -113,6 +115,7 @@ def reset_for_testing() -> None:
     _DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
     _active_model = _DEFAULT_MODEL
     MODEL = _DEFAULT_MODEL
+    runtime_state.reset_for_testing()
 
 
 def _strip_thinking(text: str) -> str:

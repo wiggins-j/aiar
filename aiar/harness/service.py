@@ -8,6 +8,7 @@
     POST /reground {"prompt": "...", "score": 4,   -> record a correction into
                     "correction": "...", "reason",
                     "instance": "docs"}              the grounding store
+    GET  /services/meta                            -> service discovery / runtime state
     GET  /healthz                                  -> readiness snapshot
 
 Run with:  uvicorn aiar.harness.service:app --port 8765
@@ -93,6 +94,7 @@ def service_prompt(req: ServicePromptRequest) -> dict:
             instance=req.instance,
             model=req.model,
             system=req.system,
+            endpoint="/services/prompt",
         )
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
@@ -155,7 +157,7 @@ def services_meta() -> dict:
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
         "active_model": active_model(),
-        "available_models": list_models(),
+        "available_models": list_models(show_all=True),
         "rag": {
             **rag,
             "instances": instances,

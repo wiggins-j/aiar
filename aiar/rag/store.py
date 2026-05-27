@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 
 from aiar.rag import instances
 from aiar.rag.ingest import Chunk
+from aiar import runtime_state
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,9 @@ def _resolve(instance: Optional[str]) -> str:
     """arg -> process-active -> RAG_INSTANCE env -> default."""
     if instance:
         return instance
+    persisted = runtime_state.get("active_instance")
+    if persisted:
+        return str(persisted)
     if _active:
         return _active
     env = os.environ.get("RAG_INSTANCE")
@@ -304,6 +308,7 @@ def delete_instance(name: str) -> dict:
         pass
     if _active == name:
         _active = instances.DEFAULT_INSTANCE
+        runtime_state.set_value("active_instance", _active)
     return {"deleted": name, "active": active_instance()}
 
 
@@ -313,8 +318,10 @@ def set_active(name: str) -> None:
     global _active
     if name == NO_RAG:
         _active = NO_RAG
+        runtime_state.set_value("active_instance", NO_RAG)
         return
     _active = _canonical_existing(name)
+    runtime_state.set_value("active_instance", _active)
 
 
 def set_active_none() -> None:
@@ -322,6 +329,7 @@ def set_active_none() -> None:
     skip retrieval (the answerer is blinded)."""
     global _active
     _active = NO_RAG
+    runtime_state.set_value("active_instance", NO_RAG)
 
 
 def active_instance() -> str:
@@ -606,6 +614,7 @@ def reset_for_testing(*, base: Optional[Path] = None) -> None:
     _collections = {}
     _active = None
     _BASE_OVERRIDE = Path(base) if base is not None else None
+    runtime_state.reset_for_testing(base=base)
     if base is not None:
         init()
 

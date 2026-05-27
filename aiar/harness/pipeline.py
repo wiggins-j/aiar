@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional
 
 from aiar.llm import call_ollama, OllamaError
 from aiar.observability import observer
+from aiar import runtime_state
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,11 @@ _active_system_prompt: "Optional[str]" = None  # None -> use the built-in defaul
 
 def active_system_prompt() -> str:
     """The current harness answer system prompt (active override or built-in)."""
-    return _active_system_prompt if _active_system_prompt else ANSWER_SYSTEM_PROMPT
+    return str(
+        runtime_state.get("active_system_prompt")
+        or _active_system_prompt
+        or ANSWER_SYSTEM_PROMPT
+    )
 
 
 def set_system_prompt(text: "Optional[str]") -> None:
@@ -59,12 +64,14 @@ def set_system_prompt(text: "Optional[str]") -> None:
     global _active_system_prompt
     text = (text or "").strip()
     _active_system_prompt = text or None
+    runtime_state.set_value("active_system_prompt", _active_system_prompt)
 
 
 def reset_system_prompt() -> None:
     """Restore the built-in default harness system prompt."""
     global _active_system_prompt
     _active_system_prompt = None
+    runtime_state.set_value("active_system_prompt", None)
 
 # ``think=True`` demo path — elicit VISIBLE reasoning via a structured
 # REASONING:/ANSWER: reply (more reliable across models than native think mode,
@@ -103,6 +110,7 @@ def answer_prompt(
     instance: Optional[str] = None,
     model: Optional[str] = None,
     system: Optional[str] = None,
+    endpoint: str = "/eval/prompt",
 ) -> Dict[str, Any]:
     """Answer ``prompt`` through the full harness pipeline.
 
@@ -183,7 +191,7 @@ def answer_prompt(
             resolved_model = model
         if system is not None:
             system_source = "override"
-        elif _active_system_prompt:
+        elif runtime_state.get("active_system_prompt") or _active_system_prompt:
             system_source = "active"
         else:
             system_source = "default"
@@ -234,11 +242,15 @@ def answer_prompt(
     else:
         resolved = active_system_prompt()
         system_prompt = resolved
-        system_source = "active" if _active_system_prompt else "default"
+        system_source = (
+            "active"
+            if (runtime_state.get("active_system_prompt") or _active_system_prompt)
+            else "default"
+        )
     options = ANSWER_THINK_OPTIONS if think else ANSWER_OPTIONS
     timeout = ANSWER_THINK_TIMEOUT_S if think else ANSWER_TIMEOUT_S
 
-    token = observer.set_context(endpoint="/eval/prompt", raw_prompt=prompt)
+    token = observer.set_context(endpoint=endpoint, raw_prompt=prompt)
     capture: Dict[str, Any] = {}
     try:
         raw_answer, latency_ms = call_ollama(

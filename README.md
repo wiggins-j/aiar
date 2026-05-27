@@ -43,6 +43,12 @@ If you also want the optional FastAPI harness service:
 pip install -e '.[rag,service]'
 ```
 
+That optional service can be used two ways:
+
+- the original evaluator-style harness path (`/eval/prompt`, `/reground`)
+- a generic local integration surface for sibling apps (`/services/prompt`,
+  `/services/meta`)
+
 After pulling a local Ollama-served model and setting `OLLAMA_MODEL`, run:
 
 ```bash
@@ -309,6 +315,8 @@ If I also asked for the optional HTTP harness service, install:
 Then export OLLAMA_MODEL and the other config vars from STEP 0 (you can
 `source config.example` and edit, or set them directly). Confirm both
 `<python-launcher> -c "import aiar"` and `aiar-doctor` work.
+If I plan to integrate another local service against AIAR, note that the HTTP
+surface now also exposes `/services/prompt` and `/services/meta`.
 
 === STEP 4: Ingest my documents into the RAG ===
 IMPORTANT — run ingest ON THE MACHINE THAT HOSTS THE MODEL + AIAR STORE. Ingest

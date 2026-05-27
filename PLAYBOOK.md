@@ -401,10 +401,30 @@ curl -s -X POST localhost:8765/eval/prompt \
   -H 'content-type: application/json' \
   -d '{"prompt":"How long is the refund window?"}'
 
+# Generic external-service prompt call:
+curl -s -X POST localhost:8765/services/prompt \
+  -H 'content-type: application/json' \
+  -d '{
+        "service_name":"LocalApp",
+        "prompt":"Answer from the currently configured docs.",
+        "instance":"default",
+        "model":"qwen2.5:7b",
+        "rag":true,
+        "judge":false
+      }'
+
+# Service discovery / runtime metadata:
+curl -s localhost:8765/services/meta
+
 # Same prompt, blind (A/B):  POST /eval/prompt?rag=false
 # Optional per-request corpus: include "instance":"mydocs" in either payload.
 # Record a correction:       POST /reground {"prompt":"...","score":3,"correction":"...","instance":"mydocs"}
 ```
+
+The watcher GUI and the optional HTTP service share the same active model,
+active RAG instance, and active harness system prompt through AIAR's local
+runtime-state file under `AIAR_BASE_DIR` (default `~/.aiar`). A switch made in
+one entrypoint is therefore visible to the other without a restart.
 
 ## Appendix: headless watcher API
 
