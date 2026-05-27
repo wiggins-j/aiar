@@ -95,6 +95,52 @@ def _rag_state(event: Dict[str, Any]) -> Optional[str]:
     return "RAG ON" if "--- Knowledge" in user_prompt else "RAG OFF"
 
 
+def _active_retrieval_features(result: Dict[str, Any]) -> List[str]:
+    """Human-readable retrieval / grounding features active for one answer."""
+    retrieval = result.get("retrieval") or {}
+    labels: List[str] = []
+    if retrieval.get("rag"):
+        labels.append("Vector retrieval")
+        if retrieval.get("hybrid"):
+            labels.append("Hybrid")
+        if retrieval.get("rerank"):
+            labels.append("Rerank")
+        mode = str(retrieval.get("rewrite_mode") or "off")
+        if mode and mode != "off":
+            labels.append("HyDE" if mode == "hyde" else "Rewrite")
+        top_k = retrieval.get("top_k")
+        if top_k is not None:
+            labels.append(f"top-k {top_k}")
+    else:
+        labels.append("RAG off")
+    if retrieval.get("grounding_reinjection"):
+        labels.append("Grounding reinjection")
+    if result.get("reground_applied"):
+        labels.append("Correction block applied")
+    return labels
+
+
+def _grounding_summary(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact grounding / retrieval facts for the Simulate page."""
+    model_name = str(result.get("model") or "unknown")
+    corpus_name = str(result.get("instance") or "default")
+    chunk_count: "int | None" = None
+    try:
+        from aiar.rag import store
+        if not store.is_ready():
+            store.init()
+        if corpus_name != "none":
+            chunk_count = store.chunk_count(instance=corpus_name)
+    except Exception:
+        chunk_count = None
+    return {
+        "model_name": model_name,
+        "corpus_name": corpus_name,
+        "chunk_count": chunk_count,
+        "active_retrieval_features": _active_retrieval_features(result),
+    }
+
+
 # --------------------------------------------------------------------------
 # Simulate (run a prompt through the harness)
 # --------------------------------------------------------------------------
@@ -117,6 +163,7 @@ def simulate_prompt(prompt: str, *, rag: bool = True, think: bool = False,
                            reground=True if reground else None,
                            instance=instance, model=model, system=system)
     result["prompt"] = prompt
+    result["grounding_summary"] = _grounding_summary(result)
     return result
 
 

@@ -9,6 +9,17 @@ function ratingBadge(rating) {
   return { cls, text: rating || "?" };
 }
 
+function renderGroundingSummary(summary) {
+  $("gs-model-name").textContent = summary?.model_name || "-";
+  $("gs-corpus-name").textContent = summary?.corpus_name || "-";
+  const chunkCount = summary?.chunk_count;
+  $("gs-chunk-count").textContent = Number.isFinite(chunkCount) ? String(chunkCount) : "-";
+  const features = Array.isArray(summary?.active_retrieval_features)
+    ? summary.active_retrieval_features
+    : [];
+  $("gs-features").textContent = features.length ? features.join(" • ") : "-";
+}
+
 // Show which retrieval frameworks were active for this answer (A/B at a glance).
 function renderRetrievalBadges(r) {
   const el = $("retrieval-badges");
@@ -100,6 +111,7 @@ function renderResult(data) {
   }
 
   renderRetrievalBadges(data.retrieval);
+  renderGroundingSummary(data.grounding_summary);
 
   $("latency").textContent = (data.latency_ms || 0) + " ms · call " + (lastCallId || "n/a");
   $("mark").disabled = !lastCallId;
