@@ -4,6 +4,7 @@
     POST /eval/prompt?rag=false                    -> blind the answerer (A/B)
     POST /eval/prompt?think=true                   -> include visible reasoning
     POST /eval/prompt?reground=true                -> prepend prior corrections
+    POST /services/prompt                          -> external-service prompt
     POST /reground {"prompt": "...", "score": 4,   -> record a correction into
                     "correction": "...", "reason",
                     "instance": "docs"}              the grounding store
@@ -18,7 +19,7 @@ runner, and the watcher GUI without going through HTTP.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -49,6 +50,21 @@ class PromptRequest(BaseModel):
     instance: Optional[str] = None
 
 
+class ServicePromptRequest(BaseModel):
+    service_name: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    context: Optional[str] = None
+    instance: Optional[str] = None
+    model: Optional[str] = None
+    system: Optional[str] = None
+    rag: bool = True
+    judge: bool = False
+    think: bool = False
+    reground: bool = False
+    top_k: Optional[int] = Field(default=None, ge=1, le=200)
+    metadata: Optional[Dict[str, Any]] = None
+
+
 @app.post("/eval/prompt")
 def eval_prompt(req: PromptRequest, rag: bool = True, think: bool = False,
                 reground: bool = False) -> dict:
@@ -60,6 +76,29 @@ def eval_prompt(req: PromptRequest, rag: bool = True, think: bool = False,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
+
+
+@app.post("/services/prompt")
+def service_prompt(req: ServicePromptRequest) -> dict:
+    """Generic service-facing prompt endpoint."""
+    try:
+        result = answer_prompt(
+            req.prompt,
+            rag=req.rag,
+            judge=req.judge,
+            think=req.think,
+            reground=True if req.reground else None,
+            top_k=req.top_k,
+            context=req.context or "",
+            instance=req.instance,
+            model=req.model,
+            system=req.system,
+        )
+    except OllamaError as exc:
+        raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
+    result["service_name"] = req.service_name
+    result["service_metadata"] = req.metadata or {}
+    return result
 
 
 class RegroundRequest(BaseModel):
