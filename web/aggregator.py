@@ -137,7 +137,54 @@ def _grounding_summary(result: Dict[str, Any]) -> Dict[str, Any]:
         "model_name": model_name,
         "corpus_name": corpus_name,
         "chunk_count": chunk_count,
+        "system_prompt_name": _current_system_prompt_name(),
         "active_retrieval_features": _active_retrieval_features(result),
+    }
+
+
+def _current_system_prompt_name() -> str:
+    """Human-friendly label for the currently active harness system prompt."""
+    from aiar.harness import pipeline
+
+    active = pipeline.active_system_prompt()
+    if active == pipeline.ANSWER_SYSTEM_PROMPT:
+        return "Built-in default"
+    for preset in _read_presets():
+        if preset.get("text", "") == active:
+            return str(preset.get("name") or "Saved preset")
+    return "Custom override"
+
+
+def get_grounding_summary() -> Dict[str, Any]:
+    """Current live grounding / retrieval setup for the Simulate page."""
+    try:
+        from aiar.llm import active_model
+        model_name = active_model()
+    except Exception:
+        model_name = "unknown"
+
+    try:
+        from aiar.rag import store, settings as rag_settings
+        if not store.is_ready():
+            store.init()
+        corpus_name = store.active_instance()
+        chunk_count = None if corpus_name == "none" else store.chunk_count(instance=corpus_name)
+        retrieval = rag_settings.effective()
+    except Exception:
+        corpus_name = "default"
+        chunk_count = None
+        retrieval = {}
+
+    retrieval["rag"] = corpus_name != "none"
+    return {
+        "model_name": str(model_name),
+        "corpus_name": str(corpus_name),
+        "chunk_count": chunk_count,
+        "system_prompt_name": _current_system_prompt_name(),
+        "active_retrieval_features": _active_retrieval_features({
+            "retrieval": retrieval,
+            "reground_applied": False,
+        }),
     }
 
 

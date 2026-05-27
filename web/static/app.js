@@ -14,10 +14,28 @@ function renderGroundingSummary(summary) {
   $("gs-corpus-name").textContent = summary?.corpus_name || "-";
   const chunkCount = summary?.chunk_count;
   $("gs-chunk-count").textContent = Number.isFinite(chunkCount) ? String(chunkCount) : "-";
+  $("gs-system-prompt-name").textContent = summary?.system_prompt_name || "-";
   const features = Array.isArray(summary?.active_retrieval_features)
     ? summary.active_retrieval_features
     : [];
   $("gs-features").textContent = features.length ? features.join(" • ") : "-";
+}
+
+async function loadGroundingSummary() {
+  try {
+    const resp = await fetch("/api/grounding-summary", { cache: "no-store" });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "load_failed");
+    renderGroundingSummary(data);
+  } catch (err) {
+    renderGroundingSummary({
+      model_name: "-",
+      corpus_name: "-",
+      chunk_count: null,
+      system_prompt_name: "-",
+      active_retrieval_features: ["Failed to load grounding summary"],
+    });
+  }
 }
 
 // Show which retrieval frameworks were active for this answer (A/B at a glance).
@@ -142,3 +160,5 @@ $("mark").addEventListener("click", markForEvaluation);
 $("prompt").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") runPrompt();
 });
+
+loadGroundingSummary();

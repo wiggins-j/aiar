@@ -44,6 +44,7 @@ from .aggregator import (
     enqueue,
     evaluation_queue,
     get_models,
+    get_grounding_summary,
     get_rag_instances,
     get_retrieval_settings,
     get_system_prompt,
@@ -117,6 +118,9 @@ class WatcherHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/models":
             self._serve_json(HTTPStatus.OK, get_models())
+            return
+        if path == "/api/grounding-summary":
+            self._serve_json(HTTPStatus.OK, get_grounding_summary())
             return
         if path == "/api/rag/instances":
             self._serve_json(HTTPStatus.OK, get_rag_instances())
