@@ -31,6 +31,12 @@ _DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")  # env boot seed
 _active_model = _DEFAULT_MODEL                                  # runtime-mutable
 MODEL = _DEFAULT_MODEL                                          # back-compat alias
 DEFAULT_TIMEOUT_SECONDS = 30
+_LENGTH_RETRY_DONE_REASONS = {"length", "max_tokens"}
+_LENGTH_RETRY_MAX_ATTEMPTS = 4
+_LENGTH_RETRY_MIN_NUM_PREDICT = 1200
+_LENGTH_RETRY_MAX_NUM_PREDICT = 4800
+_LENGTH_RETRY_TIMEOUT_FLOOR_S = 90
+_LENGTH_RETRY_TIMEOUT_CAP_S = 300
 
 
 class OllamaError(Exception):
@@ -131,6 +137,26 @@ def _strip_thinking(text: str) -> str:
     return text.strip()
 
 
+def _should_retry_on_length(done_reason: object, *, retry_on_length: bool) -> bool:
+    if not retry_on_length:
+        return False
+    reason = str(done_reason or "").strip().lower()
+    return reason in _LENGTH_RETRY_DONE_REASONS
+
+
+def _expanded_num_predict(raw: object) -> int:
+    try:
+        current = int(raw)
+    except (TypeError, ValueError):
+        current = 0
+    if current <= 0:
+        return _LENGTH_RETRY_MIN_NUM_PREDICT
+    return min(
+        max(current * 2, _LENGTH_RETRY_MIN_NUM_PREDICT),
+        _LENGTH_RETRY_MAX_NUM_PREDICT,
+    )
+
+
 def call_ollama(
     system_prompt: str,
     user_prompt: str,
@@ -140,6 +166,7 @@ def call_ollama(
     format: Optional[str] = "json",
     think: bool = False,
     capture: Optional[dict] = None,
+    retry_on_length: bool = False,
 ) -> "tuple[str, int]":
     """Call Ollama. Returns ``(response_text, latency_ms)``.
 
@@ -163,6 +190,11 @@ def call_ollama(
     ``capture`` is an optional caller-provided dict; when supplied it is
     populated with ``thinking`` (raw CoT or ``None``), ``response_text``,
     ``latency_ms``, ``prompt_tokens`` and ``completion_tokens``.
+
+    ``retry_on_length`` retries with progressively larger token budgets when
+    Ollama reports the completion stopped because it hit the token budget. The
+    retry path doubles ``num_predict`` (with a sensible floor/cap) and raises
+    the timeout floor so long answers are not silently logged mid-sentence.
     """
     model = model if model is not None else active_model()
     options = {
@@ -173,66 +205,92 @@ def call_ollama(
     }
     if options_override:
         options.update(options_override)
-    payload = {
-        "model": model,
-        "system": system_prompt,
-        "prompt": user_prompt,
-        "stream": False,
-        "think": think,
-        "options": options,
-    }
-    if format is not None:
-        payload["format"] = format
 
     result = {
         "response_text": None,
         "thinking": None,
         "prompt_tokens": None,
         "completion_tokens": None,
+        "done_reason": None,
         "error": None,
     }
+    emitted_options = dict(options)
     raised: Optional[BaseException] = None
     start = time.monotonic()
     try:
-        try:
-            r = requests.post(OLLAMA_URL, json=payload, timeout=timeout_s)
-            r.raise_for_status()
-        except requests.Timeout:
-            raised = OllamaError(f"Ollama timeout after {timeout_s}s")
-            raise raised
-        except requests.RequestException as e:
-            raised = OllamaError(f"Ollama request failed: {e}")
-            raise raised
+        attempt_options = dict(options)
+        attempt_timeout = timeout_s
+        max_attempts = _LENGTH_RETRY_MAX_ATTEMPTS if retry_on_length else 1
+        for attempt in range(max_attempts):
+            payload = {
+                "model": model,
+                "system": system_prompt,
+                "prompt": user_prompt,
+                "stream": False,
+                "think": think,
+                "options": attempt_options,
+            }
+            if format is not None:
+                payload["format"] = format
 
-        try:
-            body = r.json()
-        except ValueError as e:
-            raised = OllamaError(f"Ollama returned non-JSON: {e}")
-            raise raised
+            try:
+                r = requests.post(OLLAMA_URL, json=payload, timeout=attempt_timeout)
+                r.raise_for_status()
+            except requests.Timeout:
+                raised = OllamaError(f"Ollama timeout after {attempt_timeout}s")
+                raise raised
+            except requests.RequestException as e:
+                raised = OllamaError(f"Ollama request failed: {e}")
+                raise raised
 
-        if "response" not in body:
-            raised = OllamaError(f"Ollama response missing 'response' field: {body}")
-            raise raised
+            try:
+                body = r.json()
+            except ValueError as e:
+                raised = OllamaError(f"Ollama returned non-JSON: {e}")
+                raise raised
 
-        raw_response = body["response"]
-        # Modern Ollama returns chain-of-thought in a dedicated ``thinking``
-        # field when think=true; fall back to inline-<think> extraction.
-        native_thinking = body.get("thinking")
-        thinking_content = native_thinking or observer.extract_thinking(raw_response)
-        clean_response = _strip_thinking(raw_response)
-        result["response_text"] = clean_response
-        result["thinking"] = thinking_content
-        result["prompt_tokens"] = body.get("prompt_eval_count")
-        result["completion_tokens"] = body.get("eval_count")
+            if "response" not in body:
+                raised = OllamaError(f"Ollama response missing 'response' field: {body}")
+                raise raised
 
-        latency_ms = int((time.monotonic() - start) * 1000)
-        if capture is not None:
-            capture["thinking"] = thinking_content
-            capture["response_text"] = clean_response
-            capture["latency_ms"] = latency_ms
-            capture["prompt_tokens"] = result["prompt_tokens"]
-            capture["completion_tokens"] = result["completion_tokens"]
-        return clean_response, latency_ms
+            raw_response = body["response"]
+            # Modern Ollama returns chain-of-thought in a dedicated ``thinking``
+            # field when think=true; fall back to inline-<think> extraction.
+            native_thinking = body.get("thinking")
+            thinking_content = native_thinking or observer.extract_thinking(raw_response)
+            clean_response = _strip_thinking(raw_response)
+            result["response_text"] = clean_response
+            result["thinking"] = thinking_content
+            result["prompt_tokens"] = body.get("prompt_eval_count")
+            result["completion_tokens"] = body.get("eval_count")
+            result["done_reason"] = body.get("done_reason")
+            emitted_options = dict(attempt_options)
+
+            if _should_retry_on_length(result["done_reason"], retry_on_length=retry_on_length):
+                next_num_predict = _expanded_num_predict(attempt_options.get("num_predict"))
+                current_num_predict = attempt_options.get("num_predict")
+                if str(next_num_predict) != str(current_num_predict) and attempt + 1 < max_attempts:
+                    attempt_options = dict(attempt_options)
+                    attempt_options["num_predict"] = next_num_predict
+                    attempt_timeout = min(
+                        max(
+                            float(attempt_timeout) * 2.0,
+                            float(timeout_s),
+                            float(_LENGTH_RETRY_TIMEOUT_FLOOR_S),
+                        ),
+                        float(_LENGTH_RETRY_TIMEOUT_CAP_S),
+                    )
+                    continue
+
+            latency_ms = int((time.monotonic() - start) * 1000)
+            if capture is not None:
+                capture["thinking"] = thinking_content
+                capture["response_text"] = clean_response
+                capture["latency_ms"] = latency_ms
+                capture["prompt_tokens"] = result["prompt_tokens"]
+                capture["completion_tokens"] = result["completion_tokens"]
+                capture["done_reason"] = result["done_reason"]
+            return clean_response, latency_ms
     finally:
         latency_ms = int((time.monotonic() - start) * 1000)
         if raised is not None:
@@ -244,11 +302,12 @@ def call_ollama(
             model=model,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            options=options,
+            options=emitted_options,
             format=format,
             think=think,
             response_text=result["response_text"],
             thinking=result["thinking"],
+            done_reason=result["done_reason"],
             prompt_tokens=result["prompt_tokens"],
             completion_tokens=result["completion_tokens"],
             latency_ms=latency_ms,

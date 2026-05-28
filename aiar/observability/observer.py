@@ -168,6 +168,7 @@ def emit_call(
     completion_tokens: Optional[int],
     latency_ms: int,
     error: Optional[dict],
+    done_reason: Optional[str] = None,
 ) -> Optional[str]:
     """Append one JSONL event describing this Ollama call. Best-effort.
 
@@ -191,6 +192,7 @@ def emit_call(
             "think": think,
             "response_text": response_text,
             "thinking": thinking,
+            "done_reason": done_reason,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "latency_ms": latency_ms,

@@ -529,6 +529,7 @@ def activity_detail(config: Config, call_id: str) -> Dict[str, Any]:
         "prompt": _logged_prompt(ev),
         "llm_prompt": ev.get("user_prompt"),
         "response": ev.get("response_text"),
+        "done_reason": ev.get("done_reason"),
         "rag_state": _rag_state(ev),
         "thinking": ev.get("thinking"),
         "error": ev.get("error"),

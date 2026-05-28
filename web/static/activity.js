@@ -63,6 +63,7 @@ function render(items) {
 function renderDetails(detail) {
   return `
     <div class="activity-detail">
+      ${detail.done_reason ? `<div class="meta">Stop reason: ${escapeHtml(detail.done_reason)}</div>` : ""}
       <div class="grid-2" style="margin-top:12px">
         <div class="block"><h3>Prompt</h3><pre>${escapeHtml(detail.prompt || "")}</pre></div>
         <div class="block"><h3>Response</h3><pre>${escapeHtml(detail.response || "")}</pre></div>

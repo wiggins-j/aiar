@@ -526,6 +526,75 @@ def test_aiar_call_ollama_resolves_active_model(fresh_llm, monkeypatch):
     assert sent["model"] == "qwen-test:1b"
 
 
+def test_aiar_call_ollama_retries_on_repeated_length_stops(fresh_llm, monkeypatch):
+    requests_seen = []
+    emitted = {}
+
+    class FakeResp:
+        def __init__(self, body):
+            self._body = body
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._body
+
+    bodies = [
+        {
+            "response": "cut off",
+            "done_reason": "length",
+            "prompt_eval_count": 1,
+            "eval_count": 600,
+        },
+        {
+            "response": "still cut off",
+            "done_reason": "length",
+            "prompt_eval_count": 1,
+            "eval_count": 1200,
+        },
+        {
+            "response": "complete answer",
+            "done_reason": "stop",
+            "prompt_eval_count": 1,
+            "eval_count": 1800,
+        },
+    ]
+
+    def fake_post(url, json=None, timeout=None):
+        requests_seen.append({"options": dict(json["options"]), "timeout": timeout})
+        return FakeResp(bodies[len(requests_seen) - 1])
+
+    def fake_emit_call(**kwargs):
+        emitted.clear()
+        emitted.update(kwargs)
+        return "call-123"
+
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr(fresh_llm.observer, "emit_call", fake_emit_call)
+
+    capture = {}
+    answer, _latency = fresh_llm.call_ollama(
+        "sys",
+        "user",
+        format=None,
+        options_override={"num_predict": 600},
+        capture=capture,
+        retry_on_length=True,
+    )
+
+    assert answer == "complete answer"
+    assert len(requests_seen) == 3
+    assert requests_seen[0]["options"]["num_predict"] == 600
+    assert requests_seen[1]["options"]["num_predict"] == 1200
+    assert requests_seen[1]["timeout"] == 90
+    assert requests_seen[2]["options"]["num_predict"] == 2400
+    assert requests_seen[2]["timeout"] == 180
+    assert capture["done_reason"] == "stop"
+    assert emitted["done_reason"] == "stop"
+    assert emitted["options"]["num_predict"] == 2400
+
+
 # ===========================================================================
 # F3 — per-instance grounding
 # ===========================================================================
@@ -553,6 +622,7 @@ def _fake_harness_llm(monkeypatch, sent):
         sent["system"] = system_prompt
         sent["user"] = user_prompt
         sent["model"] = kwargs.get("model")
+        sent["retry_on_length"] = kwargs.get("retry_on_length")
         cap = kwargs.get("capture")
         if cap is not None:
             cap["thinking"] = None
@@ -585,6 +655,14 @@ def test_aiar_harness_model_override(monkeypatch):
     _fake_harness_llm(monkeypatch, sent)
     pipeline.answer_prompt("q", rag=False, judge=False, model="qwen-x:9b")
     assert sent["model"] == "qwen-x:9b"
+
+
+def test_aiar_harness_answer_path_retries_on_length(monkeypatch):
+    from aiar.harness import pipeline
+    sent = {}
+    _fake_harness_llm(monkeypatch, sent)
+    pipeline.answer_prompt("q", rag=False, judge=False)
+    assert sent["retry_on_length"] is True
 
 
 def test_aiar_harness_instance_select(fresh_store, monkeypatch):

@@ -256,7 +256,7 @@ def answer_prompt(
         raw_answer, latency_ms = call_ollama(
             system_prompt, user_prompt,
             timeout_s=timeout, model=model, options_override=options, format=None,
-            capture=capture,
+            capture=capture, retry_on_length=True,
         )
     except OllamaError as exc:
         observer.clear_context(token)
