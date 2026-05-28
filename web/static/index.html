@@ -29,30 +29,85 @@
       <section class="panel">
         <div class="section-heading">
           <h2>Grounding Context</h2>
-          <p>Current live model, corpus, and retrieval setup for the next prompt.</p>
+          <p>Pick the model, corpus, system prompt, and retrieval features for the next prompt. Changes apply immediately.</p>
         </div>
-        <dl id="grounding-summary" class="summary-grid">
+        <div id="grounding-summary" class="summary-grid">
           <div class="summary-row">
-            <dt>Model Name</dt>
-            <dd id="gs-model-name">-</dd>
+            <label class="gc-label" for="gc-model-select">Model Name</label>
+            <div class="gc-control">
+              <select id="gc-model-select"><option value="">loading...</option></select>
+              <span id="gc-model-status" class="gc-status muted"></span>
+            </div>
           </div>
           <div class="summary-row">
-            <dt>Corpus Name</dt>
-            <dd id="gs-corpus-name">-</dd>
+            <label class="gc-label" for="gc-corpus-select">Corpus Name</label>
+            <div class="gc-control">
+              <select id="gc-corpus-select"><option value="">loading...</option></select>
+              <span id="gc-corpus-status" class="gc-status muted"></span>
+            </div>
           </div>
           <div class="summary-row">
-            <dt>Chunk Count</dt>
-            <dd id="gs-chunk-count">-</dd>
+            <span class="gc-label">Chunk Count</span>
+            <div class="gc-control">
+              <span id="gs-chunk-count" class="gc-static">-</span>
+            </div>
           </div>
           <div class="summary-row">
-            <dt>System Prompt</dt>
-            <dd id="gs-system-prompt-name">-</dd>
+            <label class="gc-label" for="gc-system-prompt-select">System Prompt</label>
+            <div class="gc-control">
+              <select id="gc-system-prompt-select"><option value="">loading...</option></select>
+              <span id="gc-system-prompt-status" class="gc-status muted"></span>
+            </div>
           </div>
           <div class="summary-row">
-            <dt>Active Retrieval Features</dt>
-            <dd id="gs-features">-</dd>
+            <span class="gc-label">Active Retrieval Features</span>
+            <div class="gc-control gc-features">
+              <label class="gc-feature">
+                <span>Hybrid</span>
+                <select id="gc-feat-hybrid" data-feature="hybrid">
+                  <option value="false">Off</option>
+                  <option value="true">On</option>
+                </select>
+                <span id="gc-feat-hybrid-status" class="gc-status muted"></span>
+              </label>
+              <label class="gc-feature">
+                <span>Rerank</span>
+                <select id="gc-feat-rerank" data-feature="rerank">
+                  <option value="false">Off</option>
+                  <option value="true">On</option>
+                </select>
+                <span id="gc-feat-rerank-status" class="gc-status muted"></span>
+              </label>
+              <label class="gc-feature">
+                <span>Query rewrite</span>
+                <select id="gc-feat-rewrite_mode" data-feature="rewrite_mode">
+                  <option value="off">Off</option>
+                  <option value="rewrite">Rewrite</option>
+                  <option value="hyde">HyDE</option>
+                </select>
+                <span id="gc-feat-rewrite_mode-status" class="gc-status muted"></span>
+              </label>
+              <label class="gc-feature">
+                <span>Grounding reinjection</span>
+                <select id="gc-feat-grounding_reinjection" data-feature="grounding_reinjection">
+                  <option value="false">Off</option>
+                  <option value="true">On</option>
+                </select>
+                <span id="gc-feat-grounding_reinjection-status" class="gc-status muted"></span>
+              </label>
+              <label class="gc-feature">
+                <span>Top-k</span>
+                <select id="gc-feat-top_k" data-feature="top_k"></select>
+                <span id="gc-feat-top_k-status" class="gc-status muted"></span>
+              </label>
+              <label class="gc-feature">
+                <span>Fetch-k</span>
+                <select id="gc-feat-fetch_k" data-feature="fetch_k"></select>
+                <span id="gc-feat-fetch_k-status" class="gc-status muted"></span>
+              </label>
+            </div>
           </div>
-        </dl>
+        </div>
       </section>
 
       <section class="panel">
@@ -95,6 +150,7 @@
         <p id="verdict-reason" class="muted"></p>
         <div class="eval-actions">
           <button id="mark" class="secondary">Mark for Evaluation</button>
+          <button id="accept-judge" class="secondary" hidden>Accept LLM Judge Evaluation</button>
           <span id="mark-message" class="muted"></span>
         </div>
       </section>

@@ -95,3 +95,107 @@ def test_settings_page_parity():
     assert "/api/retrieval" in js
     assert "retrieval-badges" in (static / "index.html").read_text()
     assert "renderRetrievalBadges" in (static / "app.js").read_text()
+
+
+def test_simulate_page_grounding_dropdowns_present():
+    """The Simulate page's Grounding Context section uses save-on-change
+    dropdowns wired to the existing /api/* endpoints."""
+    from pathlib import Path
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
+    html = (static / "index.html").read_text()
+    js = (static / "app.js").read_text()
+    # One dropdown per field, each with a status span next to it.
+    for el in ("gc-model-select", "gc-corpus-select", "gc-system-prompt-select",
+               "gc-feat-hybrid", "gc-feat-rerank", "gc-feat-rewrite_mode",
+               "gc-feat-grounding_reinjection", "gc-feat-top_k", "gc-feat-fetch_k"):
+        assert el in html, f"index.html missing {el}"
+    for el in ("gc-model-status", "gc-corpus-status", "gc-system-prompt-status",
+               "gc-feat-hybrid-status", "gc-feat-rerank-status",
+               "gc-feat-rewrite_mode-status",
+               "gc-feat-grounding_reinjection-status",
+               "gc-feat-top_k-status", "gc-feat-fetch_k-status"):
+        assert el in html, f"index.html missing status span {el}"
+    # Save-on-change wiring: each select fires a POST on the 'change' event.
+    assert 'addEventListener("change", onModelChange)' in js
+    assert 'addEventListener("change", onCorpusChange)' in js
+    assert 'addEventListener("change", onSystemPromptChange)' in js
+    assert 'addEventListener("change", onRetrievalFeatureChange)' in js
+    # The page hits the existing setter endpoints — no new ones invented.
+    for endpoint in ("/api/models/active", "/api/rag/active",
+                     "/api/system-prompt", "/api/retrieval"):
+        assert endpoint in js, f"app.js missing {endpoint}"
+    # No save buttons in the Grounding Context section — save-on-change only.
+    assert "<button id=\"run\"" in html  # the prompt 'Run' button still exists
+    # The grounding context section itself has no button child.
+    start = html.index("Grounding Context")
+    end = html.index("Prompt Console")
+    section = html[start:end]
+    assert "<button" not in section, "Grounding Context must not have a save button"
+
+
+def test_accept_judge_button_wired_to_existing_verdict_endpoint():
+    """The Simulate page's 'Accept LLM Judge Evaluation' button reuses the
+    existing /api/evaluation/verdict endpoint with the judge's rating mapped
+    to a score and the judge's reason as the correction. No new backend
+    surface is introduced."""
+    from pathlib import Path
+    static = Path(__file__).resolve().parents[1] / "web" / "static"
+    html = (static / "index.html").read_text()
+    js = (static / "app.js").read_text()
+
+    # The button exists in the result panel's eval-actions row, starts hidden,
+    # and lives next to the existing 'Mark for Evaluation' button.
+    assert 'id="accept-judge"' in html
+    assert 'Accept LLM Judge Evaluation' in html
+    # The accept button appears AFTER mark-for-evaluation in the same actions
+    # row — so users see "mark, then accept" reading left to right.
+    mark_idx = html.index('id="mark"')
+    accept_idx = html.index('id="accept-judge"')
+    assert mark_idx < accept_idx, "Accept button must follow Mark button"
+
+    # Click handler is wired and POSTs to the existing verdict endpoint with
+    # a rating-mapped score and the judge's reason as correction.
+    assert 'acceptJudgeEvaluation' in js
+    assert '"/api/evaluation/verdict"' in js
+    assert '_ratingToScore' in js
+    # The mapping preserves the judge's rating round-trip via _score_to_rating:
+    # good>=8, partial>=4, bad<4.
+    assert 'if (rating === "good") return 8' in js
+    assert 'if (rating === "partial") return 5' in js
+
+    # The button is suppressed when the judge could not produce a usable
+    # reason (timeout, unparseable, etc.) — those failure tags must not be
+    # silently grounded.
+    for tag in ("judge_failed", "judge_timeout", "judge_unparseable"):
+        assert tag in js, f"app.js must guard on {tag}"
+
+
+def test_judge_timeout_default_is_180s():
+    """The judge's default per-call timeout matches the rest of the framework
+    (180s) so a slow local model on the answer path doesn't time out only the
+    judge call."""
+    import importlib, os
+    os.environ.pop("EVAL_JUDGE_TIMEOUT_S", None)
+    from aiar.eval import judge as _judge
+    importlib.reload(_judge)
+    assert _judge._JUDGE_TIMEOUT_S == 180
+
+
+def test_aggregator_setters_match_dropdown_contracts(monkeypatch):
+    """The endpoints the Simulate-page dropdowns POST to all return the
+    {ok, data} envelope that app.js expects."""
+    from web import aggregator
+    # Retrieval feature save round-trips.
+    res = aggregator.set_retrieval_setting("hybrid", True)
+    assert res["ok"] and "config" in res["data"]
+    res = aggregator.set_retrieval_setting("rewrite_mode", "hyde")
+    assert res["ok"] and res["data"]["config"]["rewrite_mode"] == "hyde"
+    res = aggregator.set_retrieval_setting("top_k", 5)
+    assert res["ok"] and res["data"]["config"]["top_k"] == 5
+    # System-prompt save round-trip (reset path).
+    res = aggregator.set_system_prompt("")
+    assert res["ok"] and res["data"]["source"] == "default"
+    res = aggregator.set_system_prompt("Be terse.")
+    assert res["ok"] and res["data"]["text"] == "Be terse."
+    # Reset back to default so we don't pollute other tests.
+    aggregator.set_system_prompt("")

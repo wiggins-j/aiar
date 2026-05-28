@@ -153,7 +153,8 @@ pre {
   background: var(--panel-2);
 }
 
-.summary-row dt {
+.summary-row dt,
+.summary-row .gc-label {
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -164,6 +165,62 @@ pre {
   font-size: 0.9rem;
   line-height: 1.4;
   word-break: break-word;
+}
+
+.gc-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.gc-control select {
+  width: auto;
+  min-width: 160px;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 0.88rem;
+}
+
+.gc-static {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.gc-status {
+  font-size: 0.78rem;
+  min-height: 1em;
+  transition: opacity 0.6s ease;
+}
+.gc-status.gc-status-applied { color: var(--green); opacity: 1; }
+.gc-status.gc-status-fading { opacity: 0; }
+.gc-status.gc-status-error { color: var(--red); opacity: 1; }
+.gc-status.gc-status-pending { color: var(--muted); opacity: 1; }
+
+.gc-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.gc-feature {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.gc-feature > span:first-child {
+  color: var(--muted);
+}
+
+.gc-feature select {
+  width: 100%;
+  min-width: 0;
 }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }

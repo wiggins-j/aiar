@@ -32,7 +32,7 @@ _JUDGE_OPTIONS = {
     "num_ctx": 4096,
 }
 
-_JUDGE_TIMEOUT_S = int(os.environ.get("EVAL_JUDGE_TIMEOUT_S", "30"))
+_JUDGE_TIMEOUT_S = int(os.environ.get("EVAL_JUDGE_TIMEOUT_S", "180"))
 
 _JUDGE_SYSTEM_PROMPT = """You are a strict evaluator of an AI assistant's answers.
 
@@ -62,8 +62,15 @@ Use "failure_tags" for machine-matchable error classes, e.g.
 when rating is "good". Output the JSON object only — no prose, no markdown."""
 
 
-def _build_judge_user_prompt(prompt: str, response: str, context: str = "") -> str:
+def _build_judge_user_prompt(
+    prompt: str,
+    response: str,
+    context: str = "",
+    criteria: str = "",
+) -> str:
     parts = [f"PROMPT:\n{prompt}", f"RESPONSE:\n{response}"]
+    if criteria:
+        parts.append(f"EVAL TARGET:\n{criteria}")
     if context:
         parts.append(f"CONTEXT:\n{context}")
     parts.append("Judge the RESPONSE now. Output the JSON verdict object only.")
@@ -105,6 +112,7 @@ def judge_answer(
     response: str,
     context: str = "",
     *,
+    criteria: str = "",
     llm_caller: Optional[LlmCaller] = None,
 ) -> Verdict:
     """Judge a single answer, returning a structured :class:`Verdict`.
@@ -114,7 +122,7 @@ def judge_answer(
     verdict.
     """
     caller = llm_caller or call_ollama
-    user_prompt = _build_judge_user_prompt(prompt, response, context)
+    user_prompt = _build_judge_user_prompt(prompt, response, context, criteria)
 
     try:
         raw, _latency = caller(

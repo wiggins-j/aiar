@@ -587,9 +587,11 @@ def test_aiar_call_ollama_retries_on_repeated_length_stops(fresh_llm, monkeypatc
     assert len(requests_seen) == 3
     assert requests_seen[0]["options"]["num_predict"] == 600
     assert requests_seen[1]["options"]["num_predict"] == 1200
-    assert requests_seen[1]["timeout"] == 90
+    # With DEFAULT_TIMEOUT_SECONDS=180 the retry doubles to 360 then clamps to
+    # the _LENGTH_RETRY_TIMEOUT_CAP_S = 300 ceiling on both retry attempts.
+    assert requests_seen[1]["timeout"] == 300
     assert requests_seen[2]["options"]["num_predict"] == 2400
-    assert requests_seen[2]["timeout"] == 180
+    assert requests_seen[2]["timeout"] == 300
     assert capture["done_reason"] == "stop"
     assert emitted["done_reason"] == "stop"
     assert emitted["options"]["num_predict"] == 2400

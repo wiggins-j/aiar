@@ -61,6 +61,11 @@ def _retrieve_candidates(query: str, n: int, *, where: "dict | None" = None,
                          instance: "str | None" = None
                          ) -> List[store.RetrievedChunk]:
     """Top-n scored candidates: hybrid (BM25+vector RRF) when enabled, else vector."""
+    if where is not None:
+        # The lexical/BM25 index is text-only and cannot enforce Chroma metadata
+        # filters. For filtered retrieval, stay on the vector path so a
+        # ``where=`` constraint cannot be diluted by unfiltered lexical hits.
+        return store.query_scored(query, n, where=where, instance=instance)
     if hybrid_enabled():
         from aiar.rag import lexical, fusion
         vector = store.query_scored(query, _env_int("RAG_VECTOR_K", 20),

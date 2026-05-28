@@ -25,11 +25,13 @@ logger = logging.getLogger(__name__)
 
 ANSWER_SYSTEM_PROMPT = (
     "You are a precise assistant. You may be given a Knowledge block retrieved "
-    "from a document corpus, then a question. Treat the Knowledge block as the "
-    "authoritative source: prefer it over your own memory and do NOT invent "
-    "facts. If the provided materials do not contain enough information to "
-    "answer confidently, say so plainly instead of answering from general "
-    "knowledge. Answer concisely in plain prose."
+    "from a document corpus, then a question. When a Knowledge block is "
+    "provided, treat it as the authoritative source: prefer it over your own "
+    "memory and do NOT invent facts beyond it. If the question concerns facts "
+    "the Knowledge block does not cover, say so plainly rather than fabricating "
+    "domain claims. For questions that are general knowledge, arithmetic, or "
+    "reasoning that does not require evidence from the corpus, answer normally. "
+    "Answer concisely in plain prose."
 )
 
 ANSWER_OPTIONS = {"num_predict": 600, "num_ctx": 4096}
@@ -111,6 +113,10 @@ def answer_prompt(
     model: Optional[str] = None,
     system: Optional[str] = None,
     endpoint: str = "/eval/prompt",
+    retrieval_query: Optional[str] = None,
+    retrieval_where: Optional[Dict[str, Any]] = None,
+    rewrite: bool = True,
+    judge_criteria: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Answer ``prompt`` through the full harness pipeline.
 
@@ -155,7 +161,13 @@ def answer_prompt(
     # 1. Retrieve once from the selected instance. The judge always scores
     #    against this; ?rag= only blinds the answerer.
     try:
-        retrieved = get_context(prompt, top_k=top_k, instance=instance) or ""
+        retrieved = get_context(
+            retrieval_query if retrieval_query is not None else prompt,
+            top_k=top_k,
+            instance=instance,
+            where=retrieval_where,
+            rewrite=rewrite,
+        ) or ""
     except Exception:  # pragma: no cover - defensive; RAG must never break here
         retrieved = ""
     answerer_context = retrieved if rag else ""
@@ -168,56 +180,10 @@ def answer_prompt(
                     if do_reground else "")
 
     if rag and not retrieved and not context and not ground_block:
-        answer = ("I don't have enough evidence in the available knowledge base "
-                  "to answer that confidently.")
-        verdict_dict = None
-        if judge:
-            from aiar.eval.judge import judge_answer
-            verdict_dict = judge_answer(prompt, answer, "").to_dict()
-        if instance == "none":
-            resolved_instance = "none"
-        elif instance:
-            resolved_instance = instance
-        else:
-            try:
-                from aiar.rag import store as _store
-                resolved_instance = _store.active_instance()
-            except Exception:
-                resolved_instance = "default"
-        try:
-            from aiar.llm import active_model as _active_model
-            resolved_model = model if model is not None else _active_model()
-        except Exception:
-            resolved_model = model
-        if system is not None:
-            system_source = "override"
-        elif runtime_state.get("active_system_prompt") or _active_system_prompt:
-            system_source = "active"
-        else:
-            system_source = "default"
-        try:
-            from aiar.rag import settings as rag_settings
-            retrieval_cfg = rag_settings.effective()
-        except Exception:  # pragma: no cover - defensive
-            retrieval_cfg = {}
-        if top_k is not None:
-            retrieval_cfg["top_k"] = top_k
-        retrieval_cfg["rag"] = bool(rag)
-        return {
-            "answer": answer,
-            "reasoning": None,
-            "verdict": verdict_dict,
-            "grounded": False,
-            "rag_enabled": rag,
-            "reground_applied": False,
-            "context_used": False,
-            "latency_ms": 0,
-            "call_id": None,
-            "instance": resolved_instance,
-            "model": resolved_model,
-            "system_source": system_source,
-            "retrieval": retrieval_cfg,
-        }
+        # No corpus evidence — pass through to the LLM with an explicit note so
+        # it can decline domain-specific questions but still answer arithmetic,
+        # general knowledge, and reasoning tasks per ANSWER_SYSTEM_PROMPT.
+        answerer_context = "[No relevant evidence retrieved from the corpus.]"
 
     # 3. Build the answer prompt.
     parts = []
@@ -277,7 +243,12 @@ def answer_prompt(
     if judge:
         from aiar.eval.judge import judge_answer
         judge_context = "\n\n".join(p for p in [retrieved, context] if p)
-        verdict = judge_answer(prompt, answer, judge_context)
+        verdict = judge_answer(
+            prompt,
+            answer,
+            judge_context,
+            criteria=judge_criteria or "",
+        )
         verdict_dict = verdict.to_dict()
 
     # Echo the resolved instance/model so the GUI can show which answered.
@@ -312,7 +283,7 @@ def answer_prompt(
         "answer": answer,
         "reasoning": reasoning,
         "verdict": verdict_dict,
-        "grounded": bool(answerer_context),
+        "grounded": bool(retrieved) and bool(rag),
         "rag_enabled": rag,
         "reground_applied": bool(ground_block),
         "context_used": bool(answerer_context),
