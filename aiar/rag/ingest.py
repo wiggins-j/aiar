@@ -25,7 +25,7 @@ import logging
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ class Chunk:
     text: str
     category: str = "general"
     metadata: Dict[str, object] = field(default_factory=dict)
+    page_span: Optional[Tuple[int, int]] = None
 
 
 def _json_to_text(raw: str) -> str:
@@ -80,52 +81,87 @@ def _json_to_text(raw: str) -> str:
     return render(data)
 
 
-def _pdf_to_text(path: Path) -> str:
-    """Extract text from a PDF with pypdf. Returns ``""`` on extraction errors."""
+def _pdf_to_text(path: Path) -> List[Tuple[str, int]]:
+    """Extract text from a PDF with pypdf.
+
+    Returns a list of ``(page_text, page_num)`` tuples (1-indexed page numbers),
+    skipping empty pages. Returns ``[]`` on extraction errors. Page-number
+    tracking is structured (no ``[Page N]`` marker strings prepended) so
+    downstream chunking can build ``page_span`` metadata cleanly.
+    """
     try:
         from pypdf import PdfReader
     except Exception as exc:
         logger.warning("ingest: could not read PDF %s (missing pypdf): %s", path, exc)
-        return ""
+        return []
     try:
         reader = PdfReader(str(path))
-        parts: List[str] = []
+        pages: List[Tuple[str, int]] = []
         for idx, page in enumerate(reader.pages, start=1):
             text = (page.extract_text() or "").strip()
             if text:
-                parts.append(f"[Page {idx}]\n{text}")
-        return "\n\n".join(parts).strip()
+                pages.append((text, idx))
+        return pages
     except Exception as exc:
         logger.warning("ingest: could not extract PDF %s: %s", path, exc)
-        return ""
+        return []
 
 
 def _chunk_text(source: str, title: str, text: str, category: str,
-                metadata: "Dict[str, object] | None" = None) -> List[Chunk]:
-    """Split text into overlapping chunks on paragraph boundaries."""
+                metadata: "Dict[str, object] | None" = None,
+                page_nums: Optional[List[int]] = None) -> List[Chunk]:
+    """Split text into overlapping chunks on paragraph boundaries.
+
+    If ``page_nums`` is provided, it must be a list aligned 1:1 with the
+    paragraphs derived from ``text`` (split on blank lines). Each emitted
+    chunk's ``page_span`` is then ``(min, max)`` of the page numbers of the
+    paragraphs included in that chunk. If ``page_nums`` is ``None``, chunks
+    have ``page_span=None`` (non-PDF callers).
+    """
     paragraphs = [p.strip() for p in text.replace("\r\n", "\n").split("\n\n") if p.strip()]
     if not paragraphs:
         flat = text.strip()
         paragraphs = [flat] if flat else []
+        # If we collapsed to a single paragraph but page_nums was per-paragraph
+        # of the original split, the alignment is lost — drop it defensively.
+        if page_nums is not None and len(page_nums) != len(paragraphs):
+            page_nums = None
+    # Defensive: if caller supplied a mismatched length, ignore page tracking
+    # rather than producing wrong spans.
+    if page_nums is not None and len(page_nums) != len(paragraphs):
+        page_nums = None
     chunks: List[Chunk] = []
     current = ""
     prev_tail = ""
+    current_pages: List[int] = []
     chunk_meta = dict(metadata or {})
-    for para in paragraphs:
+
+    def _span(pages: List[int]) -> Optional[Tuple[int, int]]:
+        if not pages:
+            return None
+        return (min(pages), max(pages))
+
+    for i, para in enumerate(paragraphs):
+        para_page = page_nums[i] if page_nums is not None else None
         if len(current) + len(para) > _CHUNK_TARGET_CHARS and current:
             chunks.append(Chunk(
                 source=source, title=title, chunk_index=len(chunks),
                 text=(prev_tail + current).strip(), category=category,
                 metadata=dict(chunk_meta),
+                page_span=_span(current_pages) if page_nums is not None else None,
             ))
             prev_tail = current[-_CHUNK_OVERLAP_CHARS:]
             current = ""
+            current_pages = []
         current += ("\n\n" if current else "") + para
+        if para_page is not None:
+            current_pages.append(para_page)
     if current.strip():
         chunks.append(Chunk(
             source=source, title=title, chunk_index=len(chunks),
             text=(prev_tail + current).strip(), category=category,
             metadata=dict(chunk_meta),
+            page_span=_span(current_pages) if page_nums is not None else None,
         ))
     return chunks
 
@@ -148,17 +184,41 @@ def ingest_file(path: Path, *, category: str = "general") -> List[Chunk]:
             front_matter, body = rag_metadata.parse_front_matter(raw)
         except Exception:
             front_matter, body = {}, raw
+    page_nums: Optional[List[int]] = None
     if path.suffix.lower() in _JSON_SUFFIXES:
         text = _json_to_text(raw)
     elif path.suffix.lower() in _PDF_SUFFIXES:
-        text = _pdf_to_text(path)
+        pages = _pdf_to_text(path)
+        # Build a text body whose paragraph splits align with page_nums.
+        # Each page's text becomes one or more paragraphs (split on blank
+        # lines); we record the page number for each paragraph so chunking
+        # can later compute (start, end) page_span.
+        para_texts: List[str] = []
+        para_pages: List[int] = []
+        for page_text, page_num in pages:
+            page_paragraphs = [
+                p.strip()
+                for p in page_text.replace("\r\n", "\n").split("\n\n")
+                if p.strip()
+            ]
+            if not page_paragraphs:
+                stripped = page_text.strip()
+                if stripped:
+                    page_paragraphs = [stripped]
+            for p in page_paragraphs:
+                para_texts.append(p)
+                para_pages.append(page_num)
+        text = "\n\n".join(para_texts)
+        if para_pages:
+            page_nums = para_pages
     else:
         text = body
     if not text.strip():
         return []
     doc_meta = dict(front_matter)
     doc_meta["document_hash"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return _chunk_text(str(path), path.stem, text, category, metadata=doc_meta)
+    return _chunk_text(str(path), path.stem, text, category,
+                       metadata=doc_meta, page_nums=page_nums)
 
 
 def iter_documents(folder: Path) -> Iterable[Path]:

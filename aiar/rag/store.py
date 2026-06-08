@@ -633,6 +633,10 @@ def _chunk_metadata(chunk: Chunk) -> dict:
     }
     for key, value in (chunk.metadata or {}).items():
         meta[str(key)] = _normalize_metadata_value(value)
+    page_span = getattr(chunk, "page_span", None)
+    if page_span is not None:
+        start, end = page_span
+        meta["page_span"] = _normalize_metadata_value([int(start), int(end)])
     return meta
 
 
