@@ -2,688 +2,125 @@
   <img src="web/static/aiar-logo.png" alt="AIAR logo" width="280" />
 </p>
 
-## Security note
+# AIAR — Local RAG with LLM-as-judge and a grounding loop
 
-AIAR is intended for **local use or other trusted-network use by default**. The
-watcher GUI (`python -m web.server`, typically `127.0.0.1:8088`) and the optional
-HTTP harness service (`uvicorn aiar.harness.service:app --port 8765`) are not
-presented as hardened, public-internet services. If you want to reach AIAR from
-another machine, keep it behind an additional security layer you control, such as:
+AIAR is a local-first retrieval-augmented generation framework for Python.
+It runs against your own [Ollama](https://ollama.com) instance, ingests your
+own documents, and ships three production-grade primitives out of the box:
+hybrid retrieval, an LLM-as-judge that returns a structured `Verdict`, and a
+grounding store that lets accepted corrections feed back into future answers.
+It is built for developers, researchers, and AI hobbyists who want to own
+their stack end to end — no cloud calls, no telemetry, no vendor lock-in.
 
-- a private VPN / mesh network like [Tailscale](https://tailscale.com/)
-- SSH port forwarding / tunneling
-- a private firewall or reverse proxy on a trusted network
-
-If you bind AIAR to `0.0.0.0`, do so only when you have already put those network
-controls in place.
-
-## Fastest install path
-
-For a fresh local setup, prefer the package-extras install path:
+## Install
 
 ```bash
-# Use the Python launcher that exists on your machine:
-# - many macOS/Linux setups: python3
-# - many Windows setups:     py
-# - use bare python only if it resolves to your intended interpreter
-git clone https://github.com/wiggins-j/aiar.git
-cd aiar
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e '.[rag]'
+pip install aiar
+# or, with the full retrieval extras (BM25, cross-encoder reranker, HyDE):
+pip install 'aiar[rag]'
 ```
 
-The RAG extra is the right default, but it is not tiny: on newer Python/macOS
-combinations it may need to build or unpack large dependency wheels, so leave a
-few GiB of temporary free disk space if you can.
-
-If you also want the optional FastAPI harness service:
+**Prerequisites:** Python 3.10+ and a running [Ollama](https://ollama.com)
+daemon (default `http://127.0.0.1:11434`). Pull at least one chat model and
+one embedding model, for example:
 
 ```bash
-pip install -e '.[rag,service]'
+ollama pull qwen2.5:7b-instruct
+ollama pull nomic-embed-text
 ```
-
-That optional service can be used two ways:
-
-- the original evaluator-style harness path (`/eval/prompt`, `/reground`)
-- a generic local integration surface for sibling apps (`/services/prompt`,
-  `/services/meta`)
-
-After pulling a local Ollama-served model and setting `OLLAMA_MODEL`, run:
-
-```bash
-aiar-doctor
-```
-
-`aiar-doctor` verifies the Python version, optional RAG dependencies, Ollama,
-active model visibility, RAG store readiness, and the bundled example corpus.
-If `aiar-doctor` is missing, the package install did not complete.
-
-## 5-minute demo
-
-Once `aiar-doctor` passes:
-
-```bash
-python -m aiar.rag.ingest ./examples/docs --instance default
-python -m aiar.harness "How many days do I have to request a refund?"
-python -m web.server
-```
-
-Then open `http://127.0.0.1:8088` and use the **Example RAG** / `default`
-instance.
-
-For retrieval tuning after the first demo, jump straight to the roadmap:
-[examples/feature-guides/improving-rag.md](/Users/wiggins/GitHub/aiar/examples/feature-guides/improving-rag.md).
-
-## Why RAG matters
-
-Here is one concrete example from a real local-government corpus test.
-
-Prompt:
-
-> Quote the exact amended language from the relevant sections governing frost
-> protection for both foundations (R403) and decks (R507).
-
-**Blind model / no corpus in context**
-
-A general ChatGPT run did the cautious thing: it refused to claim the exact
-Champaign amendment text without the actual local amendment document in context,
-and only listed likely base-code sections it would need to inspect.
-
-That is a reasonable safety behavior, but it still does not answer the user's
-actual question.
-<img width="1658" height="1236" alt="image" src="https://github.com/user-attachments/assets/e7ee67ae-a510-45f5-a48f-bcc533166cbe" />
-
-**AIAR with a proper local corpus**
-
-The same question, asked through AIAR with `RAG ON` against a corpus built from
-the Champaign amendment PDFs and answered by `qwen3.5:9b`, returned the relevant
-amended sections directly from the local corpus:
-
-- `R403.1.4.1 Frost protection` for foundations, including the amended methods
-  and exceptions
-- `R507.3.3 Frost protection` for decks, including the deck-footing methods
-<img width="2144" height="1382" alt="image" src="https://github.com/user-attachments/assets/69fefde6-1bb8-4c18-a49b-5892dd4a673f" />
-<img width="2110" height="1040" alt="image" src="https://github.com/user-attachments/assets/6e4f333b-f3f5-432e-81ef-f2e777133f46" />
-
-That is the point of AIAR:
-
-- the base model does not need to memorize one city's amendment packet
-- retrieval supplies the exact local document at answer time
-- the answer can quote the governing local text instead of guessing from the
-  generic code book
-
-This is also why AIAR includes both **RAG** and **evaluation/regrounding**. For
-high-specificity domains such as local building codes, permits, policies, SOPs,
-and internal manuals, the right question is not "is the model smart?" but "did
-the system retrieve the right source and ground the answer in it?"
-
-## ⚡ Quick start: hand this to your AI
-
-New here? Don't read the docs — **copy the block below and paste it into any
-capable coding AI agent** (Claude, ChatGPT/Codex, Gemini, Cursor, Copilot Chat,
-etc.). It will set up the entire AIAR project for you end-to-end, asking you a
-few simple questions (each with a recommended default you can just accept).
-
-````text
-You are setting up AIAR ("Artificial Intelligence and RAG") for me on my machine — a small,
-open-source framework for building AND EVALUATING a retrieval-augmented (RAG)
-assistant over MY OWN documents, using a local model served by Ollama. AIAR is
-currently **Ollama-only** as an LLM backend. The docs and defaults are
-**Qwen-first** because that is the primary tested path, but the code can use
-other Ollama-hosted models too if I choose one explicitly. The full loop is:
-ingest my docs → retrieve → answer (grounded) → judge the answer 1–10 with a
-reason → let me
-correct it → "reground" so the next answer is fixed. License is Apache-2.0; do
-not change the project's code or behavior — only set it up and run it.
-
-Important security constraint: AIAR is local-first and should not be exposed
-directly to the public internet by default. Keep the watcher GUI and optional
-HTTP harness bound to loopback unless I explicitly choose otherwise. If I want
-remote access, put it behind an additional security layer I trust, such as
-Tailscale, another private VPN, SSH port forwarding, or equivalent private
-network controls. If you mention binding to `0.0.0.0`, include that warning.
-
-Drive the whole setup for me. The authoritative steps live in PLAYBOOK.md in the
-repo — follow it. Work step by step, run the real commands, and after EACH step
-confirm it actually succeeded (show the relevant output) before moving on. Be
-defensive: never assume — check prerequisites first and stop with a clear
-explanation if something is missing.
-For every step, show:
-- the exact command(s) you ran
-- the key success output lines
-- a short pass/fail statement before moving to the next step
-Do not silently batch multiple steps into one end summary.
-
-=== STEP -1: Verify or bootstrap the repo BEFORE asking Step 0 questions ===
-First confirm you are in a real AIAR checkout, not just an empty directory or a
-bare/partial Git repo. Check the working directory and verify that BOTH
-`PLAYBOOK.md` and `config.example` are present there before doing anything else.
-
-If they are missing:
-- Show me the exact path you checked and the directory listing.
-- Check whether this is just the wrong local path by looking for another nearby
-  populated AIAR checkout.
-- If you find a populated checkout, tell me the exact correct path and switch to it.
-- If the directory only contains `.git`, has no commits, or is otherwise not
-  populated, treat it as a broken/incomplete repo bootstrap and FIX IT YOURSELF:
-  clone the canonical AIAR repo into that path, using HTTPS by default:
-  `https://github.com/wiggins-j/aiar.git`
-- If the target directory is unusable for cloning because it already contains an
-  empty `.git` directory, remove that broken directory and re-clone cleanly into
-  the same path.
-- Do NOT stop and ask me for the repo URL unless cloning the canonical repo
-  actually fails.
-- Only after the repo contents are present and BOTH `PLAYBOOK.md` and
-  `config.example` exist should you continue to Step 0.
-
-=== STEP 0: Ask me these configuration questions FIRST ===
-Ask me all of these up front. For each, tell me the recommended default and let
-me just say "defaults" to accept them all. Then use my answers (or the defaults)
-throughout. Set each as an environment variable (see config.example for the
-exact names) — AIAR is entirely environment-driven.
-
-1. What hardware will run the model, and which Qwen should I use? — FIRST either
-   tell me your specs (total RAM; GPU + VRAM if any; free disk), OR let me
-   AUTO-DETECT them: say "scan local" and I'll run the OS-appropriate probe, or
-   "scan remote <user@host>" and I'll probe over SSH:
-     • Linux:   `free -h` ; `nvidia-smi --query-gpu=memory.total --format=csv` ; `df -h ~`
-     • macOS:   `sysctl hw.memsize` ; `system_profiler SPDisplaysDataType | grep VRAM` ; `df -h ~`
-                (Apple Silicon shares ONE "unified memory" pool = your RAM)
-     • Windows: `systeminfo | findstr /C:"Total Physical Memory"` ; `nvidia-smi` ; `Get-PSDrive C`
-   Then I'll recommend the LARGEST Qwen that fits, from the table below, and set
-   OLLAMA_MODEL to a tag that actually exists for your Ollama. Qwen is the
-   recommended default, but if I explicitly prefer another Ollama-hosted model,
-   allow that too.
-
-   Qwen size → hardware (rough, Q4_K_M quant — VERIFY exact + newest at the URLs below):
-     ~1.5B   `qwen2.5:1.5b`              ~2 GB RAM  / ~2 GB VRAM   tiny boxes, smoke tests
-     ~3B     `qwen2.5:3b`               ~4 GB RAM  / ~4 GB VRAM   laptops, fast iteration
-     ~7–8B   `qwen2.5:7b`, `qwen3:8b`   ~8 GB RAM  / ~6 GB VRAM   balanced default ★
-     ~14B    `qwen2.5:14b`, `qwen3:14b` ~16 GB RAM / ~12 GB VRAM  stronger reasoning
-     ~32B    `qwen2.5:32b`, `qwen3:32b` ~32 GB RAM / ~24 GB VRAM  workstation / server
-     ~72B    `qwen2.5:72b`              ~48 GB+ RAM / 2×24 GB     multi-GPU server
-   No GPU? CPU-only runs at every size — just slower; pick one tier below your RAM row.
-
-   ⚠️ ALWAYS check the canonical sources for up-to-date models + exact specs — the
-   table above is a SNAPSHOT and will age:
-     • Qwen model cards & specs:  https://huggingface.co/Qwen
-     • Qwen 3.5 collection:       https://huggingface.co/collections/Qwen/qwen35
-     • Qwen 3.6 collection:       https://huggingface.co/collections/Qwen/qwen36
-     • Ollama-pullable tags:      https://ollama.com/library/qwen
-   The exact tag must exist for YOUR Ollama version — if any tag referenced in this
-   repo isn't pullable, substitute the nearest real one from those URLs.
-   → sets OLLAMA_MODEL
-2. Where should the AIAR checkout live, and should this setup be ISOLATED from
-   any existing AIAR/RAG state on that machine? — (recommended: if this is a
-   shared server, or if I tell you not to disturb an existing setup, create a
-   fresh checkout path such as `~/aiar-isolated` and use isolated runtime paths
-   such as `AIAR_BASE_DIR`, `AIAR_DB_PATH`, `GROUNDING_BASE_DIR`,
-   `AIAR_LOG_DIR`, `AIAR_QUEUE_FILE`, and `AIAR_VERDICTS_FILE` under a dedicated
-   prefix. On a personal/local box with no existing setup to protect, the normal
-   repo path + default `~/.aiar` state is fine.)
-3. Where is my document corpus (a folder of .txt/.md/.markdown/.rst/.json)? —
-   (recommended: pick ONE of these paths up front and use it consistently:
-   bundled `./examples/docs` for the small Acme **Example RAG** demo; a full
-   Tesla corpus under `corpus/tesla/`; or your own corpus under
-   `corpus/<name>/` / another folder you specify.)
-4. RAG corpus / collection name? — (recommended: `aiar`.) → sets AIAR_CORPUS
-5. Embedding model? — (recommended: `all-MiniLM-L6-v2`, the default.)
-   → sets AIAR_EMBEDDING_MODEL
-6. How many chunks to inject into each prompt (top-k)? — (recommended: `3`.)
-   → sets RAG_TOP_K
-7. Enable HYBRID retrieval (dense vectors + BM25)? — (recommended: ON, great for
-   exact terms.) → sets RAG_HYBRID_ENABLED=1
-8. Enable cross-encoder RERANKER? — (recommended: ON for relevance; first use
-   downloads `cross-encoder/ms-marco-MiniLM-L-6-v2` and a wide first pass of
-   RAG_FETCH_K=20.) → sets RAG_RERANK_ENABLED=1, RAG_FETCH_K=20
-9. Query rewrite / HYDE mode (off | rewrite | hyde)? — (recommended: `hyde`,
-   closes the vocabulary gap.) → sets RAG_QUERY_REWRITE_MODE
-10. Enable GROUNDING reinjection (auto-apply my past corrections to every
-   answer)? — (recommended: ON so corrections stick.)
-   → sets GROUNDING_REINJECTION_ENABLED=1
-   (Note: the project ships ALL of flags 7–10 defaulting OFF so the bare path is
-   plain vector search; we turn them on here for quality. That's expected.)
-11. GUI host and port? — (recommended: host `127.0.0.1`, port `8088`, the
-    config.example defaults.) → sets AIAR_WEB_HOST, AIAR_WEB_PORT
-12. Correction-required score threshold (a score at/below this needs a written
-    correction)? — (recommended: `7`.) → sets AIAR_REASON_THRESHOLD
-13. Do I also want the optional HTTP harness service (FastAPI)? — (recommended:
-    NO for now; the CLI + GUI need none of it. If yes, also
-    `pip install -e '.[rag,service]'` and run
-    (fallback: `pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt`)
-    `uvicorn aiar.harness.service:app --port 8765`.) If I want to reach it from
-    another machine, recommend keeping it behind Tailscale, another VPN, SSH
-    port forwarding, or equivalent trusted-network controls.
-Also note: the store persists at `~/.aiar` (AIAR_DB_PATH / AIAR_BASE_DIR); to
-reset everything later, `rm -rf ~/.aiar` (Windows PowerShell:
-`Remove-Item -Recurse -Force $HOME\.aiar`).
-
-=== STEP 1: Check prerequisites (do NOT assume) ===
-- OS: AIAR is OS-agnostic — Linux (incl. Ubuntu LTS servers), macOS, and Windows
-  all work (pure Python + pathlib; no shell scripts, no platform branches).
-  Detect mine and use the matching commands throughout (venv activation, paths,
-  reset). On a HEADLESS Ubuntu server there's no browser for the GUI — either
-  SSH-forward the GUI port (`ssh -L 8088:127.0.0.1:8088 me@server`) or set
-  `AIAR_WEB_HOST=0.0.0.0` only behind a trusted security layer such as
-  Tailscale, another VPN, SSH tunneling, or a private firewall/reverse proxy;
-  the CLI needs no GUI.
-- Python is 3.10–3.14. On newer active versions, the RAG stack may need to
-  build `chroma-hnswlib` from source on some platforms if a wheel is
-  unavailable there. Run `python3 --version` (Windows: `py --version`) and
-  confirm.
-- If I chose `scan remote <user@host>` in Step 0, verify SSH reachability early
-  before assuming the remote setup can continue. If SSH is unreachable, stop and
-  ask me for a reachable target or a network fix before doing anything invasive.
-  If the remote host is reachable by ME but not by YOU from your environment,
-  fall back to having ME run the exact probe commands on that host and paste the
-  output back to you so you can still size the model and continue safely.
-- `ollama` is installed and the server is reachable. If `ollama` is missing,
-  tell me how to install it for my OS and have me confirm:
-    • macOS:   `brew install ollama` or the .dmg from https://ollama.com/download
-    • Linux:   `curl -fsSL https://ollama.com/install.sh | sh`
-    • Windows: the installer from https://ollama.com/download (runs as a service)
-  Make sure the server is running (`ollama serve &`, the menubar/tray app, or the
-  Windows service); `ollama list` should respond.
-- Confirm I have enough free disk/RAM/VRAM for the model chosen in STEP 0 (use
-  the size→hardware table). If it won't fit, recommend the next tier down.
-
-=== STEP 2: Pull the model ===
-`ollama pull <my model>` (Qwen recommended; other Ollama-hosted models allowed if
-I chose one explicitly). Verify with
-`ollama list`.
-
-=== STEP 3: Install AIAR ===
-From the repo root: create and activate a venv, then install AIAR with the RAG
-extra. Prefer the package-extras path below; the requirements-files path is the
-equivalent fallback if needed:
-  Use the Python launcher that actually exists on that machine:
-  - Linux/macOS: usually `python3`
-  - Windows: usually `py`
-  - use bare `python` only if it is present and points at the intended version
-  <python-launcher> -m venv .venv
-  # activate — Linux/macOS:  source .venv/bin/activate
-  #            Windows (PowerShell):  .venv\Scripts\Activate.ps1
-  #            Windows (cmd):         .venv\Scripts\activate.bat
-  pip install -e '.[rag]'
-  # optional equivalent fallback:
-  # pip install -r requirements.txt -r requirements-rag.txt
-If I also asked for the optional HTTP harness service, install:
-  pip install -e '.[rag,service]'
-  # optional equivalent fallback:
-  # pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt
-Then export OLLAMA_MODEL and the other config vars from STEP 0 (you can
-`source config.example` and edit, or set them directly). Confirm both
-`<python-launcher> -c "import aiar"` and `aiar-doctor` work.
-If I plan to integrate another local service against AIAR, note that the HTTP
-surface now also exposes `/services/prompt` and `/services/meta`.
-
-=== STEP 4: Ingest my documents into the RAG ===
-IMPORTANT — run ingest ON THE MACHINE THAT HOSTS THE MODEL + AIAR STORE. Ingest
-writes embeddings into the store at AIAR_DB_PATH (default ~/.aiar/knowledge) on
-the box where the command runs. If the model + infrastructure live on a server
-(a remote/isolated setup, or if I chose `scan remote <host>` in STEP 0), run the
-ingest THERE over SSH — not on the laptop — or the vectors land in the wrong
-store and the harness/GUI on the host won't retrieve them.
-AIAR ingests a folder of documents. Two ways to fill that folder:
-  (a) MANUAL — I already have a folder of .txt/.md/.json files.
-  (b) AI-DRIVEN — an AI builds the corpus from a "Collection Brief" (see the
-      README section "Building your RAG corpus: two ways" +
-      examples/corpus-briefs/). If I want this, make me choose explicitly:
-      - Tesla full demo: use
-        `examples/corpus-briefs/tesla-manual-expert-collection-brief.md`,
-        collect the docs into `corpus/tesla/`, then ingest with
-        `--instance tesla`.
-      - My own domain: use
-        `examples/corpus-briefs/collection-brief-builder-prompt.md` to
-        interview me, write `briefs/<name>-collection-brief.md`, collect docs
-        into `corpus/<name>/`, then ingest with `--instance <name>`.
-Preview first (no writes): `python -m aiar.rag.ingest <docs folder> --dry-run`
-Then ingest for real: `python -m aiar.rag.ingest <docs folder> --instance <name>`
-(Omit `--instance` to use the active `default` instance, which the GUI labels
-as **Example RAG**; CLI/API still use the slug `default`. `--category <name>`
-adds a metadata tag.) Embeddings persist to `~/.aiar/knowledge`. Confirm chunks
-written.
-
-=== STEP 5: Run the harness ===
-`python -m aiar.harness "How many days do I have to request a refund?"`
-(use a question relevant to MY docs). Show me the answer, the judge verdict
-(rating + reason + confidence), and the call_id. Useful flags to mention:
-`--no-rag` (blind A/B baseline), `--no-judge` (skip the LLM judge), `--think`
-(show reasoning), `--json` (full result), `--reground` (apply prior corrections),
-`--top-k N`.
-Then show retrieval lift with the A/B runner:
-`python -m aiar.eval.runner ./examples/cases.json` (reports RAG-on vs RAG-off
-delta; positive = RAG helped).
-
-=== STEP 6: Confirm the quality flags are on ===
-Confirm the env vars from STEP 0 (RAG_HYBRID_ENABLED, RAG_RERANK_ENABLED +
-RAG_FETCH_K, RAG_QUERY_REWRITE_MODE, GROUNDING_REINJECTION_ENABLED) are set,
-then re-run the harness so the reranker model loads and the difference is felt.
-
-=== STEP 7: Launch the watcher GUI ===
-`python -m web.server` → open http://127.0.0.1:8088 (or my host/port). It has
-four pages: Simulate (run a prompt, see answer + verdict, mark it; toggles for Use
-RAG, Reground, Show Reasoning, and LLM Judging), Activity (every logged LLM call,
-mark any one, or Clear Recent Activity), Evaluation Queue (score 1–10 + correct),
-and Settings (switch the active Qwen model; switch the active RAG instance —
-including a first-class "No RAG" option, with the bundled Acme demo shown as
-**Example RAG** instead of raw `default` — delete a RAG instance; toggle the
-**Retrieval Features** live (hybrid, reranker, query-rewrite/HyDE, grounding,
-top-k, fetch-k — no restart, with a Reset to defaults); and edit the harness system
-prompt, with named save/load presets). Each answer's metadata reports which
-retrieval features were active (shown as badges on Simulate) so you can A/B with and
-without. Tell me it's serving and what each page does.
-
-If I'm on a headless Ubuntu LTS box or just don't want a browser, I still want
-the non-GUI path covered. The core loop is already CLI-first (`aiar.rag.ingest`,
-`aiar.harness`, `aiar.eval.runner`). For watcher-only actions that the CLI does
-not expose directly yet (Activity, queue maintenance, live Settings changes),
-run `python -m web.server` and use its local JSON API instead:
-- `POST /api/simulate`  (body may include `rag`, `think`, `reground`, `judge`, `instance`)
-- `GET /api/activity`
-- `GET /api/activity/detail?call_id=...`
-- `POST /api/activity/evaluate`
-- `POST /api/activity/clear`
-- `GET /api/evaluation/queue`
-- `POST /api/evaluation/verdict`
-- `POST /api/evaluation/clear`
-- `GET /api/models` and `POST /api/models/active`
-- `GET /api/rag/instances`, `POST /api/rag/active`, and `POST /api/rag/delete`
-- `GET /api/retrieval`, `POST /api/retrieval` `{key,value}`, `POST /api/retrieval/reset`  (live retrieval-feature toggles)
-- `GET /api/system-prompt` and `POST /api/system-prompt`
-- `GET /api/system-prompts`, `POST /api/system-prompts/save`, `POST /api/system-prompts/delete`  (named presets)
-Be explicit that there is no separate first-class CLI for Activity / queue /
-Settings today; use the GUI or the watcher JSON API.
-If no browser is available, do NOT stop at Step 7 — use these watcher API
-endpoints plus the CLI to complete Step 8 and prove the full loop.
-
-=== STEP 8: Verify the full end-to-end loop ===
-Walk me through it so I SEE it work:
-1. On Simulate, run a prompt with "Use RAG" UNCHECKED so the blind answer is
-   likely wrong (e.g. "Is live chat support available on weekends?"). Mark it
-   for evaluation.
-2. On the Evaluation queue, set a LOW score (e.g. 3) — a Correction box appears
-   (required at/below the threshold) — write what the answer SHOULD say, then
-   click "Submit + Reground". This writes to ~/.aiar/verdicts.jsonl and the
-   grounding store (~/.aiar/grounding/<hash>.json).
-3. Back on Simulate, ask the SAME prompt again with "Reground" checked: the
-   answer should incorporate my correction (green "Reground: applied" badge) and
-   the verdict should move up (e.g. bad → good).
-You can also verify from the CLI: run the prompt with `--no-rag`, then again
-with `--no-rag --reground`, and show me the second answer reflects the
-correction. That's the full loop: ingest → retrieve → answer → judge →
-evaluate → reground → verify.
-
-=== FINISH: Summarize ===
-When everything passes, give me a short summary of how to use AIAR day to day:
-the ingest command for new docs, how to run the harness/A/B runner, how to open
-the GUI, how the reground loop works, which env vars control behavior (point me
-at config.example), and that `rm -rf ~/.aiar` resets all state.
-At the very end, always give me the exact URL to open for the watcher GUI
-(`http://127.0.0.1:<port>` or the tunneled/remote URL you set up) and the exact
-commands I would rerun next for:
-- ingest
-- harness
-- A/B eval
-- watcher GUI
-- headless watcher API / `curl` path if no browser is available
-
-=== NEXT STEPS: Explore retrieval-quality methods ===
-After the loop works, give me a short **Next Steps** menu: the OPTIONAL quality
-methods I can turn on and TUNE to make retrieval better, and invite me to explore
-them. Point me first at the ROI-ranked roadmap, then the per-method guides — all in
-`examples/feature-guides/`:
-- ROADMAP (read first)               -> examples/feature-guides/improving-rag.md
-- Hybrid retrieval (vector + BM25)   -> examples/feature-guides/hybrid-retrieval.md
-- Cross-encoder reranker             -> examples/feature-guides/reranker.md
-- Query rewrite / HyDE               -> examples/feature-guides/query-rewrite-hyde.md
-- Grounding reinjection              -> examples/feature-guides/grounding-reinjection.md
-- Top-K (context size)               -> examples/feature-guides/top-k.md
-- Measure the lift (A/B + ablation)  -> examples/feature-guides/measure-lift.md
-Tell me I can either:
-- ask "What is <method>?" (e.g. "What's the reranker?") and you'll EXPLAIN it from
-  that guide's "What it is" section, or
-- say "Let's set up <method>" (e.g. "Set up the reranker") and you'll OPEN the
-  matching guide and run its "Set it up" steps with me, then measure the lift.
-Recommend the **reranker + hybrid** as the highest-impact pair to start, and remind
-me to MEASURE each change on my own corpus
-(`examples/feature-guides/measure-lift.md`) rather than trusting defaults.
-Every method is **CLI-first** — env vars plus `python -m aiar.harness` /
-`python -m aiar.eval.runner`; the one browser-optional step (recording a grounding
-correction) also has a `curl` path via the watcher API — so a headless/SSH user can
-do all of this from the command line, no GUI required.
-````
-
----
-
-# AIAR — Artificial Intelligence and RAG
-
-A small, open-source framework for building and *evaluating* a
-retrieval-augmented (RAG) assistant on **your own documents**, using a **local
-model served via [Ollama](https://ollama.com)**. The docs and defaults are
-**Qwen-first**, but the runtime can point at other Ollama models too.
-
-AIAR gives you the full loop in one repo:
-
-1. **Ingest** a folder of YOUR documents (`.txt` / `.md` / `.json`) into a
-   vector store.
-2. **Retrieve** with a real pipeline — dense vector search, optional **hybrid**
-   (vector + BM25), optional **cross-encoder reranking**, optional query
-   rewrite / HyDE.
-3. **Answer** a prompt with your local Ollama-served model, grounded in the
-   retrieved context.
-4. **Judge** the answer with an LLM-as-judge (rating + reason + confidence).
-5. **Simulate / evaluate / reground** through a web GUI: run a prompt, see the
-   response, mark it, score it 1–10 with a correction, then click **Submit +
-   Reground** to feed evaluated pairs back into a **grounding store** so the next
-   answer is corrected.
-
-Nothing here is tied to any application domain — point it at your documents and
-go.
-
-## Architecture
-
-The full loop in one repo — ingest, retrieve, ground, answer, judge, reground:
-
-```mermaid
-flowchart LR
-    subgraph INGEST["Ingest (offline)"]
-        DOCS["Your documents<br/>.txt · .md · .json"] --> ING["aiar.rag.ingest<br/>chunk + embed"]
-    end
-    ING --> STORE[("ChromaDB store<br/>N named RAG instances")]
-
-    Q(["User prompt"]) --> RET["Retriever<br/>vector + BM25 (hybrid)<br/>cross-encoder rerank<br/>query-rewrite / HyDE"]
-    STORE --> RET
-    GND[("Grounding store<br/>past corrections")] -- reground --> CTX["Context<br/>(chunks + corrections)"]
-    RET --> CTX
-    CTX --> HAR["Harness: answer_prompt<br/>answer with any Ollama-served model"]
-    HAR --> ANS(["Answer"])
-    ANS --> JUDGE["LLM-as-judge<br/>rating + reason + confidence"]
-    JUDGE --> GUI["Watcher GUI / CLI<br/>Simulate · Activity · Evaluation"]
-    GUI -- "score 1–10 + correction" --> GND
-
-    SET[["Settings<br/>active model · RAG instance · system prompt"]] -.-> HAR
-    SET -.-> RET
-    OBS["Observability<br/>JSONL call log"] -.-> GUI
-    HAR -.-> OBS
-```
-
-- **Ingest** is offline: your docs → chunks → embeddings in ChromaDB (one or many
-  named **RAG instances**; "No RAG" is also selectable).
-- **Answer time** retrieves (optionally hybrid + reranked + rewritten), prepends any
-  prior **grounding** corrections, answers with your local Ollama-served model,
-  then **judges** it.
-- The **GUI/CLI** closes the loop: a low score + correction is written back to the
-  grounding store, so the next answer to that prompt is fixed (**reground**).
-- **Settings** swaps the active model, RAG instance, and harness system prompt live.
-
-## Why "Artificial Intelligence and RAG"?
-
-Most RAG demos stop at "retrieve and answer." AIAR is about the part that
-matters in practice: *measuring whether retrieval and grounding actually made
-the answer better*, and *closing the loop* when they didn't.
-
-## Components
-
-| Package | What it is |
-|---|---|
-| `aiar/rag` | `ingest` (folder → chunks), `store` (ChromaDB), `retriever` (`get_context`), `lexical` (BM25), `fusion` (RRF), `reranker` (cross-encoder), `query_rewrite` (HyDE) |
-| `aiar/llm` | `call_ollama` — the only LLM backend today; AIAR is Ollama-only right now |
-| `aiar/eval` | `judge` (LLM-as-judge), `scorer` (deterministic rubric), `runner` (RAG-on vs RAG-off A/B) |
-| `aiar/grounding` | `store` (corrections keyed by prompt signature), `reinject` (render corrections into the next prompt) |
-| `aiar/harness` | `pipeline.answer_prompt` (prompt → retrieve → reground → answer → judge), a CLI, and an optional FastAPI `service` |
-| `aiar/observability` | JSONL logging of every LLM call (the GUI tails this) |
-| `web/` | the stdlib-only watcher GUI: Simulate / Activity / Evaluation / Settings pages |
-
-## Releasing AIAR
-
-Keep the GitHub repo as the source of truth, but publish actual tagged
-releases on top of it.
-
-- Continue developing in the repo as normal.
-- When you want a real release, bump the version in
-  [pyproject.toml](/Users/wiggins/GitHub/aiar/pyproject.toml) and
-  [aiar/__init__.py](/Users/wiggins/GitHub/aiar/aiar/__init__.py), run the test
-  suite, run `aiar-doctor`, create a tag like `v0.1.1`, push the tag, and create
-  a GitHub Release from that tag.
-- PyPI is optional. AIAR can ship successfully as a GitHub-first project if
-  `git clone` / `pip install -e '.[rag]'` is your primary install path.
 
 ## Quickstart
 
-Use the Python launcher that exists on your machine: on many macOS/Linux setups
-that means `python3`; on Windows it is often `py`. The examples below use
-`python` generically.
+```python
+from aiar.harness.pipeline import answer_prompt
 
-```bash
-# 1. Pull an Ollama model. Qwen is the recommended and primary tested path; other
-#    Ollama-hosted models can work too if you set OLLAMA_MODEL explicitly. Verify
-#    it's pullable at https://ollama.com/library/qwen
-#    (specs / collections: https://huggingface.co/Qwen ,
-#     https://huggingface.co/collections/Qwen/qwen35 ,
-#     https://huggingface.co/collections/Qwen/qwen36)
-ollama pull qwen2.5:7b          # or qwen2.5:3b (laptops), qwen3:14b (stronger), ...
-
-# 2. Install AIAR + the RAG stack
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e '.[rag]'
-
-# 3. Tell AIAR which model to use (the tag you pulled above)
-export OLLAMA_MODEL="qwen2.5:7b"                     # Windows: $env:OLLAMA_MODEL="qwen2.5:7b"
-
-# 4. Verify the install
-aiar-doctor
-
-# 5. Ingest YOUR documents
-python -m aiar.rag.ingest ./examples/docs
-
-# 6. Ask a question
-python -m aiar.harness "How many days do I have to request a refund?"
-
-# 7. Launch the GUI (Simulate → mark → evaluate → reground)
-python -m web.server      # http://127.0.0.1:8088
+result = answer_prompt("What did our Q3 deployment doc say about rollback?", judge=True)
+print(result["answer"])
+print(result["verdict"])   # {"label": "Supported" | "Unsupported" | ..., "rationale": "...", ...}
 ```
 
-See **[PLAYBOOK.md](PLAYBOOK.md)** for the complete, copy-paste, end-to-end
-walkthrough — including turning on the reranker + grounding flags and verifying
-a regrounded answer improved.
+`result` also carries `grounded`, `reground_applied`, `retrieval`, and
+`latency_ms` so you can wire the loop into your own UI or pipeline.
 
-If you do not want a browser, the core workflow is already available from the
-CLI (`aiar.rag.ingest`, `aiar.harness`, `aiar.eval.runner`). The watcher-only
-features (Activity, queue maintenance, live Settings changes) are available via
-the watcher server's local JSON API after `python -m web.server`; there is not
-yet a separate first-class CLI for those surfaces.
+## Why AIAR
 
-## Building your RAG corpus: two ways
+Most local-RAG stacks stop at "retrieve and stuff into a prompt." AIAR
+treats the answer as the *beginning* of the loop, not the end. The judge
+catches hallucinations the moment they happen; the grounding store makes
+sure the same hallucination does not happen twice. The whole system runs
+on a laptop with a Qwen-class model and no external API calls — which
+means you can ship it into environments where cloud calls are not allowed,
+and you can audit every byte the model sees.
 
-AIAR ingests a *folder of documents*. How that folder gets populated is up to you —
-there are two supported paths:
+## The three wedges
 
-**1. Manual — you gather the documents.** Drop `.txt` / `.md` / `.markdown` / `.rst`
-/ `.json` / `.pdf` files into a folder and ingest:
+### Hybrid retrieval
 
-```bash
-python -m aiar.rag.ingest /path/to/my/docs --instance my-corpus
-```
+AIAR fuses lexical and semantic retrieval rather than picking one. Every
+query runs through BM25 over a tokenized index *and* a vector search over
+Ollama embeddings; the two ranked lists are merged with reciprocal-rank
+fusion (RRF), then optionally reranked by a cross-encoder. HyDE-style query
+rewriting and configurable `top_k` / `fetch_k` give you knobs without
+forcing a tuning project on day one.
 
-(Omit `--instance` to ingest into the active built-in instance. In the GUI that
-instance is shown as **Example RAG**; in CLI/API flags its slug is still
-`default`. A new named instance is created on first ingest. If you pass a
-human-readable name such as `My Docs`, AIAR canonicalizes it to a stable slug
-for storage and preserves the display name in the watcher.)
+### LLM-as-judge Verdict
 
-If a source is browser-only, login-gated, or served from a document portal such
-as SharePoint, export or download the files manually into the corpus folder and
-then ingest that folder. AIAR does not try to bypass access controls.
+Every answer can be graded by a second LLM call that returns a structured
+`Verdict`: a label (`Supported`, `Partially supported`, `Unsupported`,
+`Off-topic`), a rationale, and the citations actually relied on. The judge
+sees the same retrieved context as the answerer, so its critique is grounded
+in evidence — and downstream code can branch on `verdict.label` to gate,
+retry, or escalate.
 
-**2. AI-driven — an AI builds the corpus from a brief.** Write a one-file
-**Collection Brief** that tells an AI agent (one with web + file tools) exactly
-which sources to use, what's in/out of scope, how to split + tag files, and the
-safety rules to respect. Hand the brief to the agent; it fetches and normalizes
-documents into a folder; then you ingest that folder with AIAR as above.
+### Grounding loop
 
-Choose one of these paths:
+When a Verdict is accepted (by a human, by automation, or by policy), the
+answer plus its supporting context is persisted to a grounding store keyed
+on the prompt. Next time a similar prompt arrives, AIAR reinjects that
+grounding *before* the answerer runs and flags `reground_applied=True`. The
+system stops re-making the same mistake — your corrections compound.
 
-- **Full Tesla demo:** start from
-  [`examples/corpus-briefs/tesla-manual-expert-collection-brief.md`](examples/corpus-briefs/tesla-manual-expert-collection-brief.md),
-  have the agent collect docs into `corpus/tesla/`, then ingest with
-  `python -m aiar.rag.ingest corpus/tesla --instance tesla`.
-- **Your own domain/template:** start from
-  [`examples/corpus-briefs/collection-brief-builder-prompt.md`](examples/corpus-briefs/collection-brief-builder-prompt.md),
-  let the AI interview you and write `briefs/<name>-collection-brief.md`,
-  collect docs into `corpus/<name>/`, then ingest with
-  `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
+## Used by
 
-- **Worked example:** [`examples/corpus-briefs/tesla-manual-expert-collection-brief.md`](examples/corpus-briefs/tesla-manual-expert-collection-brief.md)
-  — an access-respecting Tesla knowledge-base brief built on **open APIs + public
-  data** (NHTSA, vPIC, EPA fuel-economy, NREL charging, GDELT news, SEC) plus tiered
-  review/forum/sales sources with trust handling. Tesla's own sites block automated
-  agents (403 / auth-gated) and are excluded — never bypass bot protection. Includes
-  verified endpoints, safety classes, metadata schema, and eval questions.
-- **Generate your own:** paste [`examples/corpus-briefs/collection-brief-builder-prompt.md`](examples/corpus-briefs/collection-brief-builder-prompt.md)
-  into any AI — it interviews you and writes a brief like the Tesla one for your domain.
+- **[Errorta](https://github.com/wiggins-j/Errorta)** — the polished desktop
+  product built on AIAR. Tauri + React shell, hardware-aware Ollama setup,
+  drag-and-drop corpus management, and the judge-and-grounding review UX
+  for end users. (Repo private until v1.0 launch.)
 
-**Where to put the files:**
+Building something on AIAR? Open a PR adding it here.
 
-| File | Location | Tracked? |
-|---|---|---|
-| Your collection brief | `briefs/<name>-collection-brief.md` (create `briefs/`) | yours to keep / version |
-| The collected documents | `corpus/<name>/` (one topic/procedure per file) | **git-ignored** (large / regenerable) |
+## What is in the box
 
-Then ingest: `python -m aiar.rag.ingest corpus/<name> --instance <name>`.
-
-> Keep the brief **outside** the ingested folder (`briefs/`, not `corpus/<name>/`)
-> so the brief itself isn't indexed as a document. AIAR does the chunk + embed +
-> index; the brief only governs what the AI collects and how it splits/tags files.
-> See [`examples/corpus-briefs/README.md`](examples/corpus-briefs/README.md) for the
-> full workflow.
+- `aiar.harness.pipeline.answer_prompt` — the one-call entry point used
+  in the Quickstart above.
+- `aiar.rag` — hybrid retrieval, BM25 + vector + RRF, optional
+  cross-encoder reranker, HyDE rewriting.
+- `aiar.eval` — the LLM-as-judge with structured `Verdict` schema.
+- `aiar.grounding` — accepted-correction store and reground pipeline.
+- `aiar.harness.service` — optional FastAPI service exposing
+  `/services/prompt` and `/services/meta` for other apps on the box.
+- `aiar.observability` — call IDs, latency, and retrieval traces for
+  every answer.
 
 ## Configuration
 
-Everything is environment-driven; see [`config.example`](config.example) for the
-full list. The retrieval-quality flags (`RAG_HYBRID_ENABLED`,
-`RAG_RERANK_ENABLED`, `RAG_QUERY_REWRITE_MODE`) and grounding
-(`GROUNDING_REINJECTION_ENABLED`) all default OFF so the bare path is plain
-vector retrieval — turn them on to trade a little latency for relevance.
+AIAR reads `AIAR_*` environment variables for runtime configuration —
+endpoints, model names, reranker toggles, grounding-store paths, instance
+isolation, and so on. Sensible defaults work out of the box for a local
+Ollama install; see [PLAYBOOK.md](PLAYBOOK.md) for the full matrix.
 
-## Requirements
+## Contributing
 
-- **OS-agnostic** — Linux (incl. Ubuntu LTS servers), macOS, and Windows. Pure
-  Python + `pathlib`; no shell scripts or platform-specific code.
-- Python 3.10–3.14
-- [Ollama](https://ollama.com) running locally with a model pulled. Qwen is the
-  recommended and primary tested path, so the docs point at Qwen tags and sizing
-  guidance: <https://ollama.com/library/qwen>, <https://huggingface.co/Qwen>,
-  <https://huggingface.co/collections/Qwen/qwen35>, and
-  <https://huggingface.co/collections/Qwen/qwen36>. Other Ollama-hosted models are
-  possible if you set `OLLAMA_MODEL` explicitly, but they are not the main
-  documented path today.
-- Preferred install: `pip install -e '.[rag]'`. Equivalent fallback:
-  `pip install -r requirements.txt -r requirements-rag.txt`. The RAG stack is
-  optional: without it the store is unavailable and the harness answers from the
-  bare model.
+PRs welcome. The deep-dive operator guide lives at
+[PLAYBOOK.md](PLAYBOOK.md) — end-to-end walkthrough covering ingestion,
+the harness, the watcher GUI, regrounding, evals, and operational notes.
+Worked examples live under
+[examples/feature-guides/improving-rag.md](examples/feature-guides/improving-rag.md).
+
+For framework-level discussion, file an issue. For polished-product
+feedback, see Errorta (above).
 
 ## License
 
-Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Apache-2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE), or the `license` field in
+[pyproject.toml](pyproject.toml).
