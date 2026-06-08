@@ -15,10 +15,14 @@ their stack end to end — no cloud calls, no telemetry, no vendor lock-in.
 ## Install
 
 ```bash
-pip install aiar
+pip install aiar-rag
 # or, with the full retrieval extras (BM25, cross-encoder reranker, HyDE):
-pip install 'aiar[rag]'
+pip install 'aiar-rag[rag]'
 ```
+
+> **Note on the name:** the distribution on PyPI is `aiar-rag` because `aiar`
+> was already taken. The import package remains `aiar` — so your code uses
+> `import aiar`, but you install with `pip install aiar-rag`.
 
 **Prerequisites:** Python 3.10+ and a running [Ollama](https://ollama.com)
 daemon (default `http://127.0.0.1:11434`). Pull at least one chat model and

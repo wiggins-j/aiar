@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aiar"
+name = "aiar-rag"
 version = "0.2.0"
 description = "AIAR — local retrieval-augmented generation with LLM-judge grounding loop"
 readme = "README.md"
