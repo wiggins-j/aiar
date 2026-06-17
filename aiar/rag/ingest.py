@@ -107,6 +107,71 @@ def _pdf_to_text(path: Path) -> List[Tuple[str, int]]:
         return []
 
 
+def _pages_to_body_and_nums(
+    pages: List[Tuple[str, int]]
+) -> Tuple[str, Optional[List[int]]]:
+    """Flatten ``(page_text, page_num)`` pairs into one body whose paragraph
+    splits (on blank lines) align 1:1 with the returned ``page_nums``, so
+    ``_chunk_text`` can derive each chunk's ``(min, max)`` page_span.
+
+    Shared by the PDF file path (``ingest_file``) and the in-memory document API
+    path (``ingest_document``) so both produce identical page tracking. Returns
+    ``(body, None)`` when no page text survives.
+    """
+    para_texts: List[str] = []
+    para_pages: List[int] = []
+    for page_text, page_num in pages:
+        page_paragraphs = [
+            p.strip()
+            for p in (page_text or "").replace("\r\n", "\n").split("\n\n")
+            if p.strip()
+        ]
+        if not page_paragraphs:
+            stripped = (page_text or "").strip()
+            if stripped:
+                page_paragraphs = [stripped]
+        for p in page_paragraphs:
+            para_texts.append(p)
+            para_pages.append(int(page_num))
+    body = "\n\n".join(para_texts)
+    return body, (para_pages or None)
+
+
+def ingest_document(
+    *,
+    source: str,
+    title: str,
+    text: Optional[str] = None,
+    pages: Optional[List[Dict[str, object]]] = None,
+    category: str = "general",
+    metadata: Optional[Dict[str, object]] = None,
+) -> List[Chunk]:
+    """Chunk an **in-memory** document into ``Chunk``s — the server-side path for
+    the remote ingest API. Mirrors ``ingest_file`` (same chunker, same
+    ``document_hash``) so a remotely-ingested corpus is identical to a
+    file-ingested one.
+
+    Provide EITHER ``pages`` (``[{"page": int, "text": str}, ...]``) for a
+    faithful ``page_span`` round-trip (Errorta F013 source-jump), OR flat
+    ``text`` (then ``page_span`` is ``None``). ``pages`` wins if both are given.
+    Returns ``[]`` when there is no usable text.
+    """
+    page_nums: Optional[List[int]] = None
+    if pages:
+        pairs = [
+            (str(p.get("text") or ""), int(p.get("page") or 0)) for p in pages
+        ]
+        body, page_nums = _pages_to_body_and_nums(pairs)
+    else:
+        body = text or ""
+    if not body.strip():
+        return []
+    doc_meta = dict(metadata or {})
+    doc_meta["document_hash"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    return _chunk_text(source, title, body, category,
+                       metadata=doc_meta, page_nums=page_nums)
+
+
 def _chunk_text(source: str, title: str, text: str, category: str,
                 metadata: "Dict[str, object] | None" = None,
                 page_nums: Optional[List[int]] = None) -> List[Chunk]:
@@ -188,29 +253,7 @@ def ingest_file(path: Path, *, category: str = "general") -> List[Chunk]:
     if path.suffix.lower() in _JSON_SUFFIXES:
         text = _json_to_text(raw)
     elif path.suffix.lower() in _PDF_SUFFIXES:
-        pages = _pdf_to_text(path)
-        # Build a text body whose paragraph splits align with page_nums.
-        # Each page's text becomes one or more paragraphs (split on blank
-        # lines); we record the page number for each paragraph so chunking
-        # can later compute (start, end) page_span.
-        para_texts: List[str] = []
-        para_pages: List[int] = []
-        for page_text, page_num in pages:
-            page_paragraphs = [
-                p.strip()
-                for p in page_text.replace("\r\n", "\n").split("\n\n")
-                if p.strip()
-            ]
-            if not page_paragraphs:
-                stripped = page_text.strip()
-                if stripped:
-                    page_paragraphs = [stripped]
-            for p in page_paragraphs:
-                para_texts.append(p)
-                para_pages.append(page_num)
-        text = "\n\n".join(para_texts)
-        if para_pages:
-            page_nums = para_pages
+        text, page_nums = _pages_to_body_and_nums(_pdf_to_text(path))
     else:
         text = body
     if not text.strip():

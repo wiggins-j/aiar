@@ -34,10 +34,15 @@ except Exception as exc:  # pragma: no cover - optional dependency
 from aiar.llm import OllamaError, active_model, healthcheck, list_models
 from aiar.rag import store
 from aiar.harness.pipeline import ANSWER_SYSTEM_PROMPT, active_system_prompt, answer_prompt
+from aiar.harness.admin_routes import router as admin_router
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.1.0")
+app = FastAPI(title="AIAR harness", version="0.2.0")
+
+# Authenticated remote ingest + instance-management routes (loopback + token).
+# Existing query/eval routes below are unchanged.
+app.include_router(admin_router)
 
 
 @app.on_event("startup")
