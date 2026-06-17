@@ -223,7 +223,10 @@ one bad doc recorded in `errors[]`, rest succeed; `ensure_writable` raising →
 - `app.include_router(admin_router)` after the existing routes.
 - Bump `FastAPI(version=...)` from the stale `"0.1.0"` to match `pyproject`
   (`0.2.0`) while here (cosmetic, existing bug).
-- **No changes** to `eval_prompt`, `service_prompt`, `reground`, `healthz`,
+- Add `"remote_ingest": _remote_ingest_mounted()` to the `/healthz` body (AC#8) —
+  the only edit to an existing route, additive (new key, existing keys unchanged).
+  Derived from the mounted routes so a query-only build reports `false`.
+- **No other changes** to `eval_prompt`, `service_prompt`, `reground`,
   `services_meta`. Loopback bind unchanged (run command unchanged).
 
 **Tests** (`tests/test_service.py`): add a regression asserting the existing

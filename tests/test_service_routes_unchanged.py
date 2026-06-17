@@ -35,7 +35,27 @@ def test_eval_prompt_still_works(client):
 def test_healthz_unchanged(client):
     r = client.get("/healthz")
     assert r.status_code == 200
-    assert r.json()["ok"] is True
+    body = r.json()
+    assert body["ok"] is True
+    assert body["rag"]["store_ready"] is True
+
+
+def test_healthz_advertises_remote_ingest_when_mounted(client):
+    # the real service.app mounts the ingest router -> marker must be true (§9.8)
+    assert client.get("/healthz").json()["remote_ingest"] is True
+
+
+def test_healthz_remote_ingest_false_without_routes(monkeypatch):
+    # a query-only app (router NOT mounted) must NOT claim ingest capability
+    from fastapi import FastAPI
+    bare = FastAPI()
+    monkeypatch.setattr(service, "app", bare)
+
+    @bare.get("/healthz")
+    def _h():
+        return {"remote_ingest": service._remote_ingest_mounted()}
+
+    assert TestClient(bare).get("/healthz").json()["remote_ingest"] is False
 
 
 def test_admin_routes_are_mounted(client):

@@ -45,6 +45,24 @@ app = FastAPI(title="AIAR harness", version="0.2.0")
 app.include_router(admin_router)
 
 
+def _remote_ingest_mounted() -> bool:
+    """True iff the authenticated ingest/instance routes are mounted on this app.
+
+    The Errorta client decides whether ingest is available from this marker (not
+    from ``store_ready``/``embedder_ready``), so a healthy but query-only AIAR
+    must report ``false`` rather than look ingest-capable and 404 later. Derived
+    from the mounted routes — not a hand-set flag — so it can never lie about what
+    this process serves. Handles both how ``include_router`` is represented across
+    FastAPI versions: a single ``_IncludedRouter`` entry (identity match) or the
+    sub-routes flattened into ``app.routes`` (path match).
+    """
+    return any(
+        getattr(r, "original_router", None) is admin_router
+        or getattr(r, "path", "").startswith("/instances")
+        for r in app.routes
+    )
+
+
 @app.on_event("startup")
 def _startup() -> None:
     store.init()
@@ -143,6 +161,7 @@ def healthz() -> dict:
     return {
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
+        "remote_ingest": _remote_ingest_mounted(),
         "rag": rag,
     }
 
