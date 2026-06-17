@@ -151,17 +151,25 @@ def ingest_document(
     ``document_hash``) so a remotely-ingested corpus is identical to a
     file-ingested one.
 
-    Provide EITHER ``pages`` (``[{"page": int, "text": str}, ...]``) for a
-    faithful ``page_span`` round-trip (Errorta F013 source-jump), OR flat
+    Provide EITHER ``pages`` (``[{"page": int, "text": str}, ...]``, 1-indexed)
+    for a faithful ``page_span`` round-trip (Errorta F013 source-jump), OR flat
     ``text`` (then ``page_span`` is ``None``). ``pages`` wins if both are given.
-    Returns ``[]`` when there is no usable text.
+    If any page entry is missing a valid (>=1) ``page`` number, page tracking is
+    dropped for the whole document (ingest the text with ``page_span=None``)
+    rather than emitting wrong spans from a defaulted page 0. Returns ``[]`` when
+    there is no usable text.
     """
     page_nums: Optional[List[int]] = None
     if pages:
-        pairs = [
-            (str(p.get("text") or ""), int(p.get("page") or 0)) for p in pages
-        ]
-        body, page_nums = _pages_to_body_and_nums(pairs)
+        nums = [p.get("page") for p in pages]
+        valid = all(isinstance(n, int) and not isinstance(n, bool) and n >= 1
+                    for n in nums)
+        if valid:
+            pairs = [(str(p.get("text") or ""), int(p["page"])) for p in pages]
+            body, page_nums = _pages_to_body_and_nums(pairs)
+        else:
+            # malformed page numbering -> keep the text, drop page spans
+            body = "\n\n".join(str(p.get("text") or "") for p in pages)
     else:
         body = text or ""
     if not body.strip():

@@ -299,11 +299,28 @@ Run: `pytest tests/ -k admin` (existing suite: `pytest tests/`).
 6. Existing query/eval routes + `aerospace` unchanged. → new router only; no edits
    to existing handlers; regression test.
 7. Loopback bind preserved; works over the SSH tunnel. → §3.2; no bind change.
-8. `GET /healthz` advertises `"remote_ingest": true` once the ingest routes are
-   mounted (a query-only AIAR reports `false`). The Errorta client gates
-   ingest-availability on this marker, not on `store_ready`/`embedder_ready`, so
-   a healthy-but-query-only host doesn't look ingest-capable and 404 later. →
-   `service._remote_ingest_mounted()`, derived from the mounted routes.
+8. `GET /healthz` advertises `"remote_ingest": true` only when the ingest routes
+   are mounted **and** a token is configured (a query-only host, or one with no
+   `AIAR_SERVICE_TOKEN`, reports `false` — it would 503 every write). The Errorta
+   client gates ingest-availability on this marker, not on
+   `store_ready`/`embedder_ready`. → `service._remote_ingest_enabled()`.
+
+---
+
+## 7a. Client contract notes (for the Errorta adapter)
+
+- **Read the job body, not just `status`.** A job is `"done"` on full *or partial*
+  success; inspect `errors[]` and `chunks_added` to detect per-document failures.
+  `accepted` is the number of documents received, not the number stored.
+- **`status: "failed"`** means the requested publish failed, or nothing was stored
+  and at least one document errored. A re-ingest of all-duplicates is `"done"`
+  with `chunks_added: 0`, `duplicates > 0`.
+- **One `source` = one document per batch.** Chunk identity and dedup key on
+  `source` (+ `document_hash`), not `doc_id`. Two documents in one batch sharing a
+  `source` clobber each other — send a stable, unique `source` per document.
+- **`pages` must be 1-indexed** (`[{page, text}]`). A missing/invalid page number
+  drops page tracking for that document (`page_span: null`) instead of emitting
+  wrong spans.
 
 ---
 

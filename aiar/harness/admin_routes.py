@@ -168,7 +168,10 @@ def ingest_documents(instance: str, req: IngestRequest) -> dict:
         except Exception as exc:  # one bad doc never aborts the batch (§7)
             job.errors.append({"doc_id": doc.doc_id, "error": str(exc)})
 
-    if req.publish:
+    # Publish only if requested AND the batch wasn't a total failure — don't flip
+    # a brand-new draft to published when nothing landed and docs errored. A
+    # re-ingest of all-duplicates (0 added, no errors) is a legitimate publish.
+    if req.publish and not (job.chunks_added == 0 and job.errors):
         try:
             store.publish_instance(name)
         except Exception as exc:

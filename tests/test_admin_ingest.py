@@ -92,6 +92,14 @@ def test_ingest_all_empty_docs_job_failed(client):
     assert len(job["errors"]) == 2
 
 
+def test_publish_skipped_when_batch_wholly_failed(client):
+    # publish=True must NOT publish a draft when nothing landed and docs errored
+    payload = {"documents": [{"doc_id": "e1", "source": "s", "text": ""}],
+               "publish": True}
+    client.post("/instances/proj/documents", json=payload, headers=AUTH)
+    assert client._fake._inst["proj"] == "draft"  # still a draft, not published
+
+
 def test_ingest_too_many_documents_413(client):
     payload = {"documents": [
         {"doc_id": f"d{i}", "source": f"s{i}", "text": "x"} for i in range(201)]}

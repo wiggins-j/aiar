@@ -35,6 +35,7 @@ from aiar.llm import OllamaError, active_model, healthcheck, list_models
 from aiar.rag import store
 from aiar.harness.pipeline import ANSWER_SYSTEM_PROMPT, active_system_prompt, answer_prompt
 from aiar.harness.admin_routes import router as admin_router
+from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
@@ -48,19 +49,28 @@ app.include_router(admin_router)
 def _remote_ingest_mounted() -> bool:
     """True iff the authenticated ingest/instance routes are mounted on this app.
 
-    The Errorta client decides whether ingest is available from this marker (not
-    from ``store_ready``/``embedder_ready``), so a healthy but query-only AIAR
-    must report ``false`` rather than look ingest-capable and 404 later. Derived
-    from the mounted routes — not a hand-set flag — so it can never lie about what
-    this process serves. Handles both how ``include_router`` is represented across
-    FastAPI versions: a single ``_IncludedRouter`` entry (identity match) or the
-    sub-routes flattened into ``app.routes`` (path match).
+    Derived from the mounted routes — not a hand-set flag — so it can never lie
+    about what this process serves. Handles both how ``include_router`` is
+    represented across FastAPI versions: a single ``_IncludedRouter`` entry
+    (identity match) or the sub-routes flattened into ``app.routes`` (path match).
     """
     return any(
         getattr(r, "original_router", None) is admin_router
         or getattr(r, "path", "").startswith("/instances")
         for r in app.routes
     )
+
+
+def _remote_ingest_enabled() -> bool:
+    """Whether remote ingest is actually *usable* right now: the routes are
+    mounted AND a token is configured.
+
+    The Errorta client decides whether ingest is available from this marker (not
+    from ``store_ready``/``embedder_ready``). A box with the routes mounted but no
+    ``AIAR_SERVICE_TOKEN`` set rejects every write with 503 (fail-closed), so it
+    must report ``false`` here rather than look capable and fail on first push.
+    """
+    return _remote_ingest_mounted() and auth._configured_token() is not None
 
 
 @app.on_event("startup")
@@ -161,7 +171,7 @@ def healthz() -> dict:
     return {
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
-        "remote_ingest": _remote_ingest_mounted(),
+        "remote_ingest": _remote_ingest_enabled(),
         "rag": rag,
     }
 

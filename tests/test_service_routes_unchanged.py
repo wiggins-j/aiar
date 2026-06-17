@@ -40,22 +40,24 @@ def test_healthz_unchanged(client):
     assert body["rag"]["store_ready"] is True
 
 
-def test_healthz_advertises_remote_ingest_when_mounted(client):
-    # the real service.app mounts the ingest router -> marker must be true (§9.8)
+def test_healthz_remote_ingest_true_when_mounted_and_token_set(client, monkeypatch):
+    # routes mounted AND token configured -> ingest is actually usable (§9.8)
+    monkeypatch.setenv("AIAR_SERVICE_TOKEN", "secret")
     assert client.get("/healthz").json()["remote_ingest"] is True
 
 
-def test_healthz_remote_ingest_false_without_routes(monkeypatch):
-    # a query-only app (router NOT mounted) must NOT claim ingest capability
+def test_healthz_remote_ingest_false_when_token_unset(client, monkeypatch):
+    # routes mounted but NO token -> every write 503s, so must report false
+    monkeypatch.delenv("AIAR_SERVICE_TOKEN", raising=False)
+    assert client.get("/healthz").json()["remote_ingest"] is False
+
+
+def test_remote_ingest_mounted_false_without_routes(monkeypatch):
+    # a query-only app (router NOT mounted) is not ingest-capable regardless
     from fastapi import FastAPI
     bare = FastAPI()
     monkeypatch.setattr(service, "app", bare)
-
-    @bare.get("/healthz")
-    def _h():
-        return {"remote_ingest": service._remote_ingest_mounted()}
-
-    assert TestClient(bare).get("/healthz").json()["remote_ingest"] is False
+    assert service._remote_ingest_mounted() is False
 
 
 def test_admin_routes_are_mounted(client):

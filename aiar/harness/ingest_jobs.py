@@ -47,16 +47,28 @@ class JobRecord:
 _JOBS: Dict[str, JobRecord] = {}
 _JOBS_LOCK = threading.Lock()
 
+# Cap the in-memory registry so a long-lived service can't accumulate job
+# records forever. Insertion order is preserved, so eviction is FIFO (oldest
+# first). v1 has one synchronous client; this is just a leak backstop.
+_MAX_JOBS = 1000
+
 
 def new_job(instance: str, *, documents_total: int = 0) -> JobRecord:
     job = JobRecord(job_id=uuid.uuid4().hex, instance=instance,
                     documents_total=documents_total)
     with _JOBS_LOCK:
         _JOBS[job.job_id] = job
+        while len(_JOBS) > _MAX_JOBS:
+            _JOBS.pop(next(iter(_JOBS)))
     return job
 
 
 def finish(job: JobRecord, status: str) -> None:
+    # Field mutation here (and on job.chunks_added/errors in the route) is not
+    # under _JOBS_LOCK. Safe under v1's contract: each request owns its job and
+    # drives it to a terminal state before the client ever receives the job_id,
+    # so no reader races a writer. Revisit when ingest moves to a background task
+    # that the client polls concurrently (then guard field access too).
     job.status = status
     job.ended_at = _iso_now()
 

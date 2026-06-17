@@ -43,6 +43,22 @@ def test_empty_document_returns_no_chunks():
     assert ingest.ingest_document(source="s", title="t", pages=[]) == []
 
 
+def test_malformed_page_numbers_degrade_to_no_span():
+    # missing 'page' key must NOT produce page-0 spans — ingest text, span=None
+    chunks = ingest.ingest_document(source="s", title="t", pages=[
+        {"text": "alpha content"}, {"page": 2, "text": "bravo content"}])
+    assert chunks
+    assert all(c.page_span is None for c in chunks)
+    assert "alpha content" in chunks[0].text
+
+
+def test_invalid_page_number_below_one_degrades():
+    chunks = ingest.ingest_document(source="s", title="t", pages=[
+        {"page": 0, "text": "zero page text"}])
+    assert chunks
+    assert chunks[0].page_span is None
+
+
 def test_document_hash_stable_and_metadata_carried():
     a = ingest.ingest_document(source="s", title="t", text="same body",
                                metadata={"k": "v"})
