@@ -422,10 +422,13 @@ def test_aiar_ingest_supports_pdf(monkeypatch, tmp_path):
     from aiar.rag import ingest as ingest_mod
     pdf = tmp_path / "policy.pdf"
     pdf.write_bytes(b"%PDF-pretend")
-    monkeypatch.setattr(ingest_mod, "_pdf_to_text", lambda path: "PDF extracted text about permit rules")
+    # _pdf_to_text returns [(page_text, page_num), ...] since the page_span feature.
+    monkeypatch.setattr(ingest_mod, "_pdf_to_text",
+                        lambda path: [("PDF extracted text about permit rules", 1)])
     chunks = ingest_mod.ingest_file(pdf)
     assert chunks
     assert "PDF extracted text" in chunks[0].text
+    assert chunks[0].page_span == (1, 1)
 
 
 # ===========================================================================

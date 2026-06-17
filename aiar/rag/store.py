@@ -73,6 +73,22 @@ _active: Optional[str] = None           # process-active instance; None until in
 _BASE_OVERRIDE: Optional[Path] = None   # test pin for the registry base
 
 
+class StoreNotReady(RuntimeError):
+    """Raised when a write/ingest is attempted but the store or embedder cannot
+    serve it right now. Carries a machine ``code`` for the HTTP layer to map to a
+    503 (so a remote ingest never gets a false "success" — see ``ensure_writable``).
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+# Curated instances a remote (client) caller may never delete. ``default`` and
+# the ``none`` sentinel are already protected explicitly in ``delete_instance``.
+RESERVED_INSTANCES = {"aerospace"}
+
+
 @dataclass
 class RetrievedChunk:
     """One retrieval hit: chunk text plus provenance and similarity.
@@ -266,8 +282,9 @@ def publish_instance(name: str) -> None:
 
 def delete_instance(name: str) -> dict:
     """Delete a RAG instance: drop its ChromaDB collection, registry entry, and
-    cached collection handle + BM25 index. The ``default`` instance and the
-    ``none`` sentinel cannot be deleted. If the deleted instance was active, the
+    cached collection handle + BM25 index. The ``default`` instance, the ``none``
+    sentinel, and any name in ``RESERVED_INSTANCES`` (e.g. ``aerospace``) cannot
+    be deleted. If the deleted instance was active, the
     active resets to ``default``. Returns ``{"deleted": name, "active": ...}``.
     """
     global _active
@@ -281,6 +298,8 @@ def delete_instance(name: str) -> dict:
     name = _canonical_existing(raw)
     if name == instances.DEFAULT_INSTANCE:
         raise ValueError("cannot delete the default instance")
+    if name in RESERVED_INSTANCES:
+        raise ValueError(f"cannot delete reserved instance: {name!r}")
     desc = _registry.get(name)
     if desc is None:
         raise ValueError(f"unknown instance: {name!r}")
@@ -521,6 +540,24 @@ def query(text: str, n_results: int = 3, *,
 def is_ready() -> bool:
     """True iff the store initialised successfully."""
     return _available
+
+
+def ensure_writable() -> None:
+    """Raise ``StoreNotReady`` if a write/ingest cannot succeed right now.
+
+    Unlike ``health()`` — which deliberately avoids loading the embedder so HTTP
+    readiness checks stay cheap — this *forces* the embedder to load. ``add``
+    returns ``0`` both when every chunk is a duplicate AND when the embedder
+    fails to load (it cannot embed), so an ingest route that does not call this
+    first cannot tell "nothing new" from "nothing stored" and would report a
+    false success. Call this before ``add`` and map the error to a 503.
+    """
+    if _registry is None and not _available:
+        init()
+    if not (_available and _client is not None and _registry is not None):
+        raise StoreNotReady("store_unavailable", "RAG store is not initialised")
+    if not _ensure_embedder():
+        raise StoreNotReady("embedder_unavailable", "embedder failed to load")
 
 
 def chunk_count(*, instance: Optional[str] = None) -> Optional[int]:
