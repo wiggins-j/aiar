@@ -21,7 +21,7 @@ class FakeStore:
     StoreNotReady = store.StoreNotReady
 
     def __init__(self):
-        self._inst = {"default": "published", "aerospace": "published"}
+        self._inst = {"default": "published", "reserved": "published"}
         self.added = []          # (instance, n_chunks)
         self._seen_hashes = set()  # emulate store.add's document_hash dedup
         self.writable = True
@@ -44,8 +44,8 @@ class FakeStore:
     def delete_instance(self, name):
         if name == "default":
             raise ValueError("cannot delete the default instance")
-        if name == "aerospace":
-            raise ValueError("cannot delete reserved instance: 'aerospace'")
+        if name == "reserved":
+            raise ValueError("cannot delete reserved instance: 'reserved'")
         self._inst.pop(name, None)
         return {"deleted": name, "active": "default"}
 
@@ -107,10 +107,10 @@ def test_token_unset_returns_503(client, monkeypatch):
 
 
 def test_create_idempotent_created_flag(client):
-    r1 = client.post("/instances", json={"name": "Errorta Proj"}, headers=AUTH)
+    r1 = client.post("/instances", json={"name": "Remote Proj"}, headers=AUTH)
     assert r1.status_code == 200
-    assert r1.json() == {"instance": "errorta-proj", "status": "draft", "created": True}
-    r2 = client.post("/instances", json={"name": "Errorta Proj"}, headers=AUTH)
+    assert r1.json() == {"instance": "remote-proj", "status": "draft", "created": True}
+    r2 = client.post("/instances", json={"name": "Remote Proj"}, headers=AUTH)
     assert r2.json()["created"] is False
 
 
@@ -140,9 +140,9 @@ def test_publish_known(client):
     assert r.json() == {"instance": "p", "published": True}
 
 
-def test_delete_default_and_aerospace_protected_400(client):
+def test_delete_default_and_reserved_protected_400(client):
     assert client.delete("/instances/default", headers=AUTH).status_code == 400
-    assert client.delete("/instances/aerospace", headers=AUTH).status_code == 400
+    assert client.delete("/instances/reserved", headers=AUTH).status_code == 400
 
 
 def test_delete_unknown_404(client):

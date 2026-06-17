@@ -84,15 +84,6 @@ on the prompt. Next time a similar prompt arrives, AIAR reinjects that
 grounding *before* the answerer runs and flags `reground_applied=True`. The
 system stops re-making the same mistake — your corrections compound.
 
-## Used by
-
-- **[Errorta](https://github.com/wiggins-j/Errorta)** — the polished desktop
-  product built on AIAR. Tauri + React shell, hardware-aware Ollama setup,
-  drag-and-drop corpus management, and the judge-and-grounding review UX
-  for end users. (Repo private until v1.0 launch.)
-
-Building something on AIAR? Open a PR adding it here.
-
 ## What is in the box
 
 - `aiar.harness.pipeline.answer_prompt` — the one-call entry point used
@@ -113,6 +104,12 @@ endpoints, model names, reranker toggles, grounding-store paths, instance
 isolation, and so on. Sensible defaults work out of the box for a local
 Ollama install; see [PLAYBOOK.md](PLAYBOOK.md) for the full matrix.
 
+## NEXT STEPS
+
+Tune retrieval quality with the worked guides in `examples/feature-guides/`,
+starting with
+[improving-rag.md](examples/feature-guides/improving-rag.md).
+
 ## Contributing
 
 PRs welcome. The deep-dive operator guide lives at
@@ -121,8 +118,7 @@ the harness, the watcher GUI, regrounding, evals, and operational notes.
 Worked examples live under
 [examples/feature-guides/improving-rag.md](examples/feature-guides/improving-rag.md).
 
-For framework-level discussion, file an issue. For polished-product
-feedback, see Errorta (above).
+For framework-level discussion, file an issue.
 
 ## License
 

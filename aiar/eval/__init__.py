@@ -10,6 +10,6 @@ Public surface:
 from .schemas import Verdict
 from . import judge, scorer, runner
 
-HARNESS_VERSION = "0.1.0"
+HARNESS_VERSION = "0.2.1"
 
 __all__ = ["Verdict", "judge", "scorer", "runner", "HARNESS_VERSION"]

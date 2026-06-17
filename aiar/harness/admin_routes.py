@@ -4,7 +4,7 @@ Mounted on the harness ``app`` (see ``service.py``). Every route requires the
 bearer token (``require_token`` at router level) and the mutating ones gate on
 ``store.ensure_writable()`` so a remote client can never get a false "success"
 when nothing was embedded. All embedding is server-side MiniLM — no route
-accepts client vectors. See ``docs/specs/2026-06-17-remote-corpus-ingest-api.md``.
+accepts client vectors.
 
 This module is intentionally thin: it wraps existing ``aiar.rag.store`` /
 ``aiar.rag.ingest`` functions in HTTP. No new retrieval logic.
@@ -20,7 +20,7 @@ from aiar.harness import ingest_jobs
 from aiar.harness.auth import require_token
 from aiar.rag import ingest, instances, store
 
-# Request caps (§7): the client pages above these.
+# Request caps: clients should page above these.
 _MAX_DOCS = 200
 _MAX_BYTES = 8 * 1024 * 1024  # 8 MB of document text per request
 
@@ -57,7 +57,7 @@ def _resolve_desc(instance: str):
     """Descriptor for an already-existing instance (matched by exact name or
     slug), or None. Reuses ``store.descriptor`` so resolution matches the rest of
     AIAR and avoids ``list_instances``' per-instance ``chunk_count`` cost. We
-    never auto-create on these routes (decision #4): an unknown name is a 404,
+    never auto-create on these routes: an unknown name is a 404,
     not a stray corpus."""
     for cand in (instance, instances.slugify(instance)):
         desc = store.descriptor(cand)
@@ -128,7 +128,7 @@ def delete_instance(instance: str) -> dict:
         raise HTTPException(404, {"code": "unknown_instance", "error": instance})
     try:
         result = store.delete_instance(desc.name)
-    except ValueError as exc:  # default / reserved (aerospace) / none
+    except ValueError as exc:  # default / reserved / none
         raise HTTPException(400, {"code": "protected", "error": str(exc)})
     return {"deleted": True, "active": result.get("active")}
 
@@ -165,7 +165,7 @@ def ingest_documents(instance: str, req: IngestRequest) -> dict:
             added = store.add(chunks, instance=name)
             job.chunks_added += added
             job.duplicates += len(chunks) - added
-        except Exception as exc:  # one bad doc never aborts the batch (§7)
+        except Exception as exc:  # one bad doc never aborts the batch
             job.errors.append({"doc_id": doc.doc_id, "error": str(exc)})
 
     # Publish only if requested AND the batch wasn't a total failure — don't flip

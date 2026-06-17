@@ -39,7 +39,7 @@ from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.2.0")
+app = FastAPI(title="AIAR harness", version="0.2.1")
 
 # Authenticated remote ingest + instance-management routes (loopback + token).
 # Existing query/eval routes below are unchanged.
@@ -65,7 +65,7 @@ def _remote_ingest_enabled() -> bool:
     """Whether remote ingest is actually *usable* right now: the routes are
     mounted AND a token is configured.
 
-    The Errorta client decides whether ingest is available from this marker (not
+    Remote clients decide whether ingest is available from this marker (not
     from ``store_ready``/``embedder_ready``). A box with the routes mounted but no
     ``AIAR_SERVICE_TOKEN`` set rejects every write with 503 (fail-closed), so it
     must report ``false`` here rather than look capable and fail on first push.

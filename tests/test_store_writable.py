@@ -47,9 +47,10 @@ def test_ensure_writable_raises_when_store_unavailable(monkeypatch):
 
 def test_delete_reserved_instance_refused(writable_store, monkeypatch):
     # Canonicalise to the reserved slug without touching a real registry.
-    monkeypatch.setattr(store, "_canonical_existing", lambda name: "aerospace")
+    monkeypatch.setattr(store, "RESERVED_INSTANCES", {"reserved"})
+    monkeypatch.setattr(store, "_canonical_existing", lambda name: "reserved")
     with pytest.raises(ValueError, match="reserved"):
-        store.delete_instance("aerospace")
+        store.delete_instance("reserved")
 
 
 def test_delete_default_instance_refused(writable_store, monkeypatch):

@@ -152,8 +152,8 @@ def ingest_document(
     file-ingested one.
 
     Provide EITHER ``pages`` (``[{"page": int, "text": str}, ...]``, 1-indexed)
-    for a faithful ``page_span`` round-trip (Errorta F013 source-jump), OR flat
-    ``text`` (then ``page_span`` is ``None``). ``pages`` wins if both are given.
+    for faithful ``page_span`` metadata, OR flat ``text`` (then ``page_span`` is
+    ``None``). ``pages`` wins if both are given.
     If any page entry is missing a valid (>=1) ``page`` number, page tracking is
     dropped for the whole document (ingest the text with ``page_span=None``)
     rather than emitting wrong spans from a defaulted page 0. Returns ``[]`` when

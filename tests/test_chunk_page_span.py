@@ -1,4 +1,4 @@
-"""Tests for per-chunk page_span metadata (F013 source-jump prep).
+"""Tests for per-chunk page_span metadata.
 
 PDF chunks must carry a ``page_span`` (start, end) tuple covering the page
 numbers of the paragraphs in that chunk. Non-PDF chunks (markdown, json,

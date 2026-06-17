@@ -84,9 +84,9 @@ class StoreNotReady(RuntimeError):
         self.code = code
 
 
-# Curated instances a remote (client) caller may never delete. ``default`` and
+# Additional curated instances a remote caller may never delete. ``default`` and
 # the ``none`` sentinel are already protected explicitly in ``delete_instance``.
-RESERVED_INSTANCES = {"aerospace"}
+RESERVED_INSTANCES: set[str] = set()
 
 
 @dataclass
@@ -283,8 +283,8 @@ def publish_instance(name: str) -> None:
 def delete_instance(name: str) -> dict:
     """Delete a RAG instance: drop its ChromaDB collection, registry entry, and
     cached collection handle + BM25 index. The ``default`` instance, the ``none``
-    sentinel, and any name in ``RESERVED_INSTANCES`` (e.g. ``aerospace``) cannot
-    be deleted. If the deleted instance was active, the
+    sentinel, and any name in ``RESERVED_INSTANCES`` cannot be deleted. If the
+    deleted instance was active, the
     active resets to ``default``. Returns ``{"deleted": name, "active": ...}``.
     """
     global _active

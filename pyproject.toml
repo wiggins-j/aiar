@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiar-rag"
-version = "0.2.0"
+version = "0.2.1"
 description = "AIAR — local retrieval-augmented generation with LLM-judge grounding loop"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Jonathan Wiggins", email = "jonathanwiggins2012@gmail.com" },
+    { name = "Jonathan Wiggins" },
 ]
 keywords = ["rag", "llm", "retrieval", "local-ai", "ollama", "grounding", "judge"]
 classifiers = [
