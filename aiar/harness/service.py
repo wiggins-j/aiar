@@ -39,7 +39,7 @@ from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.2.1")
+app = FastAPI(title="AIAR harness", version="0.2.3")
 
 # Authenticated remote ingest + instance-management routes (loopback + token).
 # Existing query/eval routes below are unchanged.
@@ -71,6 +71,25 @@ def _remote_ingest_enabled() -> bool:
     must report ``false`` here rather than look capable and fail on first push.
     """
     return _remote_ingest_mounted() and auth._configured_token() is not None
+
+
+def _pure_retrieve_mounted() -> bool:
+    """True iff the authenticated pure-retrieve route is mounted on this app."""
+    retrieve_path = "/instances/{instance}/retrieve"
+    router_has_route = any(
+        getattr(r, "path", "") == retrieve_path
+        for r in getattr(admin_router, "routes", [])
+    )
+    return any(
+        getattr(r, "path", "") == retrieve_path
+        or (getattr(r, "original_router", None) is admin_router and router_has_route)
+        for r in app.routes
+    )
+
+
+def _pure_retrieve_enabled() -> bool:
+    """Whether pure retrieve is usable right now: mounted and token configured."""
+    return _pure_retrieve_mounted() and auth._configured_token() is not None
 
 
 @app.on_event("startup")
@@ -172,6 +191,7 @@ def healthz() -> dict:
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
         "remote_ingest": _remote_ingest_enabled(),
+        "pure_retrieve": _pure_retrieve_enabled(),
         "rag": rag,
     }
 

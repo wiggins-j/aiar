@@ -394,6 +394,7 @@ port forwarding, or an equivalent trusted reverse-proxy/firewall setup.
 pip install -e '.[rag,service]'
 # equivalent fallback:
 # pip install -r requirements.txt -r requirements-rag.txt -r requirements-service.txt
+export AIAR_SERVICE_TOKEN="change-me"   # required for /instances/* admin/retrieve routes
 uvicorn aiar.harness.service:app --port 8765
 
 # Answer + judge:
@@ -413,6 +414,10 @@ curl -s -X POST localhost:8765/services/prompt \
         "judge":false
       }'
 
+# Pure retrieval against a published instance, no generation:
+curl -s 'localhost:8765/instances/default/retrieve?q=refund%20window&k=4' \
+  -H "authorization: Bearer $AIAR_SERVICE_TOKEN"
+
 # Service discovery / runtime metadata:
 curl -s localhost:8765/services/meta
 
@@ -420,6 +425,10 @@ curl -s localhost:8765/services/meta
 # Optional per-request corpus: include "instance":"mydocs" in either payload.
 # Record a correction:       POST /reground {"prompt":"...","score":3,"correction":"...","instance":"mydocs"}
 ```
+
+Pure-retrieve scores are Chroma cosine similarity (`score_order: "desc"`), so
+higher scores are closer matches. The route is authenticated because it returns
+corpus contents; when `AIAR_SERVICE_TOKEN` is unset it fails closed with 503.
 
 The watcher GUI and the optional HTTP service share the same active model,
 active RAG instance, and active harness system prompt through AIAR's local

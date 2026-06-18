@@ -1,4 +1,4 @@
-"""Authenticated remote ingest + instance-management routes for AIAR.
+"""Authenticated remote ingest, retrieve + instance-management routes for AIAR.
 
 Mounted on the harness ``app`` (see ``service.py``). Every route requires the
 bearer token (``require_token`` at router level) and the mutating ones gate on
@@ -11,9 +11,10 @@ This module is intentionally thin: it wraps existing ``aiar.rag.store`` /
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from aiar.harness import ingest_jobs
@@ -23,6 +24,8 @@ from aiar.rag import ingest, instances, store
 # Request caps: clients should page above these.
 _MAX_DOCS = 200
 _MAX_BYTES = 8 * 1024 * 1024  # 8 MB of document text per request
+_RETRIEVE_DEFAULT_K = 8
+_RETRIEVE_MAX_K = 50
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -51,6 +54,12 @@ class IngestRequest(BaseModel):
     publish: bool = False
 
 
+class RetrieveRequest(BaseModel):
+    q: str
+    k: Optional[int] = None
+    category: Optional[str] = None
+
+
 # --- helpers ----------------------------------------------------------------
 
 def _resolve_desc(instance: str):
@@ -74,11 +83,94 @@ def _require_writable() -> None:
                             detail={"code": exc.code, "error": str(exc)})
 
 
+def _require_readable() -> None:
+    try:
+        store.ensure_readable()
+    except store.StoreNotReady as exc:
+        raise HTTPException(status_code=503,
+                            detail={"code": exc.code, "error": str(exc)})
+
+
 def _doc_bytes(doc: DocumentIn) -> int:
     n = len((doc.text or "").encode("utf-8"))
     for p in (doc.pages or []):
         n += len(str(p.get("text") or "").encode("utf-8"))
     return n
+
+
+def _normalize_retrieve_k(k: Optional[int]) -> int:
+    value = _RETRIEVE_DEFAULT_K if k is None else int(k)
+    if value < 1:
+        return 1
+    if value > _RETRIEVE_MAX_K:
+        return _RETRIEVE_MAX_K
+    return value
+
+
+def _parse_page_span(value: Any) -> Optional[List[int]]:
+    if value is None or value == "":
+        return None
+    raw = value
+    if isinstance(value, str):
+        try:
+            raw = json.loads(value)
+        except ValueError:
+            return None
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None
+    try:
+        return [int(raw[0]), int(raw[1])]
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _retrieve_hit_to_dict(hit) -> dict:
+    meta = dict(hit.metadata or {})
+    return {
+        "chunk_id": hit.id,
+        "source": str(meta.get("source") or ""),
+        "title": str(meta.get("title") or ""),
+        "text": hit.text,
+        "score": hit.score,
+        "chunk_index": _optional_int(meta.get("index")),
+        "category": str(meta.get("category") or "general"),
+        "page_span": _parse_page_span(meta.get("page_span")),
+        "metadata": meta,
+    }
+
+
+def _retrieve_response(instance: str, q: str, k: Optional[int],
+                       category: Optional[str]) -> dict:
+    query = (q or "").strip()
+    if not query:
+        raise HTTPException(400, {"code": "empty_query", "error": "q is required"})
+    desc = _resolve_desc(instance)
+    if desc is None or desc.status != "published":
+        raise HTTPException(404, {"code": "unknown_instance", "error": instance})
+    top_k = _normalize_retrieve_k(k)
+    _require_readable()
+    category_filter = (category or "").strip() or None
+    where = {"category": category_filter} if category_filter else None
+    hits = store.query_scored(query, n_results=top_k, where=where, instance=desc.name)
+    out = [_retrieve_hit_to_dict(h) for h in hits]
+    return {
+        "instance": desc.name,
+        "query": query,
+        "k": top_k,
+        "score_kind": "cosine_similarity",
+        "score_order": "desc",
+        "hits": out,
+        "count": len(out),
+    }
 
 
 # --- instance management ----------------------------------------------------
@@ -110,6 +202,18 @@ def instance_health(instance: str) -> dict:
     h = store.health(instance=desc.name)
     h["published"] = desc.status == "published"
     return h
+
+
+@router.get("/instances/{instance}/retrieve")
+def retrieve_instance(instance: str, q: str = Query(...),
+                      k: Optional[int] = Query(default=None),
+                      category: Optional[str] = Query(default=None)) -> dict:
+    return _retrieve_response(instance, q, k, category)
+
+
+@router.post("/instances/{instance}/retrieve")
+def retrieve_instance_body(instance: str, req: RetrieveRequest) -> dict:
+    return _retrieve_response(instance, req.q, req.k, req.category)
 
 
 @router.post("/instances/{instance}/publish")

@@ -26,6 +26,28 @@ def test_ensure_writable_passes_when_embedder_loads(writable_store, monkeypatch)
     store.ensure_writable()  # should not raise
 
 
+def test_ensure_readable_passes_when_embedder_loads(writable_store, monkeypatch):
+    monkeypatch.setattr(store, "_ensure_embedder", lambda: True)
+    store.ensure_readable()  # should not raise
+
+
+def test_ensure_readable_raises_when_embedder_fails(writable_store, monkeypatch):
+    monkeypatch.setattr(store, "_ensure_embedder", lambda: False)
+    with pytest.raises(store.StoreNotReady) as exc:
+        store.ensure_readable()
+    assert exc.value.code == "embedder_unavailable"
+
+
+def test_ensure_readable_raises_when_store_unavailable(monkeypatch):
+    monkeypatch.setattr(store, "_available", False)
+    monkeypatch.setattr(store, "_client", None)
+    monkeypatch.setattr(store, "_registry", None)
+    monkeypatch.setattr(store, "init", lambda: None)
+    with pytest.raises(store.StoreNotReady) as exc:
+        store.ensure_readable()
+    assert exc.value.code == "store_unavailable"
+
+
 def test_ensure_writable_raises_when_embedder_fails(writable_store, monkeypatch):
     monkeypatch.setattr(store, "_ensure_embedder", lambda: False)
     with pytest.raises(store.StoreNotReady) as exc:
