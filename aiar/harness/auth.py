@@ -1,4 +1,4 @@
-"""Bearer-token auth for AIAR's remote write surface.
+"""Bearer-token auth for AIAR's remote admin corpus surface.
 
 The harness service is loopback-bound and reached over an SSH tunnel, but the
 ingest/instance-management routes are a *write* surface, so they require a bearer
@@ -12,8 +12,10 @@ Policy (decision #1 — static token, fail-closed):
     box never silently accepts unauthenticated writes.
   * A missing/malformed/wrong token is **401**.
 
-Read-only routes (``/healthz``, ``/services/meta``, query/eval) do not use this
-dependency and stay open on the loopback interface.
+Public read-only service routes (``/healthz``, ``/services/meta``, query/eval)
+do not use this dependency and stay open on the loopback interface. Corpus reads
+that expose document contents (for example ``/instances/{id}/retrieve``) are
+token-gated alongside ingest and instance management.
 """
 from __future__ import annotations
 

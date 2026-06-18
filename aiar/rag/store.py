@@ -542,6 +542,22 @@ def is_ready() -> bool:
     return _available
 
 
+def ensure_readable() -> None:
+    """Raise ``StoreNotReady`` if a read/retrieve cannot succeed right now.
+
+    ``query_scored`` deliberately degrades to ``[]`` so the prompt harness can
+    continue without RAG. HTTP read routes need a stricter preflight so a remote
+    client can distinguish "published corpus with no hits" from "store/embedder
+    unavailable".
+    """
+    if _registry is None and not _available:
+        init()
+    if not (_available and _client is not None and _registry is not None):
+        raise StoreNotReady("store_unavailable", "RAG store is not initialised")
+    if not _ensure_embedder():
+        raise StoreNotReady("embedder_unavailable", "embedder failed to load")
+
+
 def ensure_writable() -> None:
     """Raise ``StoreNotReady`` if a write/ingest cannot succeed right now.
 
@@ -552,12 +568,7 @@ def ensure_writable() -> None:
     first cannot tell "nothing new" from "nothing stored" and would report a
     false success. Call this before ``add`` and map the error to a 503.
     """
-    if _registry is None and not _available:
-        init()
-    if not (_available and _client is not None and _registry is not None):
-        raise StoreNotReady("store_unavailable", "RAG store is not initialised")
-    if not _ensure_embedder():
-        raise StoreNotReady("embedder_unavailable", "embedder failed to load")
+    ensure_readable()
 
 
 def chunk_count(*, instance: Optional[str] = None) -> Optional[int]:
