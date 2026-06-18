@@ -39,7 +39,7 @@ from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.2.1")
+app = FastAPI(title="AIAR harness", version="0.2.3")
 
 # Authenticated remote ingest + instance-management routes (loopback + token).
 # Existing query/eval routes below are unchanged.
