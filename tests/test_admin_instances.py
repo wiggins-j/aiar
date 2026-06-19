@@ -25,6 +25,7 @@ class FakeStore:
         self.added = []          # (instance, n_chunks)
         self._seen_hashes = set()  # emulate store.add's document_hash dedup
         self.writable = True
+        self.ingests = []        # (instance, error) — last-ingest telemetry
 
     # lifecycle
     def ensure_writable(self):
@@ -40,6 +41,9 @@ class FakeStore:
 
     def publish_instance(self, name):
         self._inst[name] = "published"
+
+    def record_ingest(self, name, *, error=None):
+        self.ingests.append((name, error))
 
     def delete_instance(self, name):
         if name == "default":

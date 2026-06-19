@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from aiar.harness import admin_routes
-from aiar.rag import store
+from aiar.rag import pure_retrieve, store
 
 AUTH = {"Authorization": "Bearer secret"}
 
@@ -47,6 +47,8 @@ def client(monkeypatch):
     monkeypatch.setenv("AIAR_SERVICE_TOKEN", "secret")
     fake = FakeRetrieveStore()
     monkeypatch.setattr(admin_routes, "store", fake)
+    # Pure-retrieve logic lives in the twin; patch the store seam it uses too.
+    monkeypatch.setattr(pure_retrieve, "store", fake)
     app = FastAPI()
     app.include_router(admin_routes.router)
     c = TestClient(app)

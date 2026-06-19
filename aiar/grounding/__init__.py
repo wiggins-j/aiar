@@ -9,14 +9,26 @@ for a matching prompt, ``reinject.grounding_block`` looks up the corrections and
 renders a compact block telling the model what it got wrong before.
 """
 
-from .store import Correction, GroundingStore, record, lookup, normalize_signature
+from aiar.contracts.grounding import GroundingRecord
+from .store import (
+    Correction,
+    GroundingStore,
+    record,
+    lookup,
+    record_grounding,
+    lookup_grounding,
+    normalize_signature,
+)
 from .reinject import grounding_block
 
 __all__ = [
     "Correction",
+    "GroundingRecord",
     "GroundingStore",
     "record",
     "lookup",
+    "record_grounding",
+    "lookup_grounding",
     "normalize_signature",
     "grounding_block",
 ]

@@ -60,6 +60,10 @@ class InstanceDescriptor:
     rerank_model: Optional[str] = None
     created_at: str = field(default_factory=_iso_now)
     published_at: Optional[str] = None
+    # Index-readiness telemetry: when the last ingest ran and its last error,
+    # so a consumer can tell "ready" from "ingest failed".
+    last_ingest_at: Optional[str] = None
+    last_ingest_error: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -76,6 +80,8 @@ class InstanceDescriptor:
             rerank_model=d.get("rerank_model") or None,
             created_at=str(d.get("created_at", "") or _iso_now()),
             published_at=d.get("published_at") or None,
+            last_ingest_at=d.get("last_ingest_at") or None,
+            last_ingest_error=d.get("last_ingest_error") or None,
         )
 
 
@@ -225,6 +231,17 @@ class Registry:
             desc.published_at = _iso_now()
             self._save()
             return desc
+
+    def record_ingest(self, name: str, *, error: Optional[str] = None) -> None:
+        """Stamp the instance's last-ingest time + error (readiness telemetry).
+        No-op for an unknown instance — best-effort, never raises."""
+        with self._lock:
+            desc = self._entries.get(name)
+            if desc is None:
+                return
+            desc.last_ingest_at = _iso_now()
+            desc.last_ingest_error = error or None
+            self._save()
 
     def delete(self, name: str) -> bool:
         """Remove an instance from the registry. Returns True if it was present.

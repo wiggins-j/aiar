@@ -105,7 +105,9 @@ def test_retrieve_route_does_not_call_generation(monkeypatch):
     monkeypatch.setattr(service, "healthcheck", lambda: True)
     monkeypatch.setattr(service, "store", FakeStore())
     from aiar.harness import admin_routes
+    from aiar.rag import pure_retrieve
     monkeypatch.setattr(admin_routes, "store", service.store)
+    monkeypatch.setattr(pure_retrieve, "store", service.store)
 
     c = TestClient(service.app)
     r = c.get("/instances/default/retrieve",

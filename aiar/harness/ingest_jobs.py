@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import threading
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+
+from aiar.contracts.ingest import serialize_ingest_result
 
 
 def _iso_now() -> str:
@@ -37,11 +39,25 @@ class JobRecord:
     chunks_added: int = 0
     duplicates: int = 0
     errors: List[dict] = field(default_factory=list)
+    published: bool = False
     started_at: str = field(default_factory=_iso_now)
     ended_at: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        """The polled job payload IS an ``aiar.ingest.v1`` result (contract §3),
+        plus transport-only keys (job_id, timestamps). Additive over the
+        IngestResult shape — existing keys are preserved for back-compat."""
+        return {
+            **serialize_ingest_result(
+                instance=self.instance, status=self.status,
+                accepted=self.documents_total, chunks_added=self.chunks_added,
+                duplicates=self.duplicates, errors=self.errors,
+                published=self.published),
+            "job_id": self.job_id,
+            "documents_total": self.documents_total,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+        }
 
 
 _JOBS: Dict[str, JobRecord] = {}
