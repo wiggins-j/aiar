@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiar-rag"
-version = "0.2.4"
+version = "0.2.5"
 description = "AIAR — local retrieval-augmented generation with LLM-judge grounding loop"
 readme = "README.md"
 requires-python = ">=3.10"

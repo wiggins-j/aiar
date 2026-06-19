@@ -22,10 +22,11 @@ runner, and the watcher GUI without going through HTTP.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import Depends, FastAPI, HTTPException
     from pydantic import BaseModel, Field
 except Exception as exc:  # pragma: no cover - optional dependency
     raise SystemExit(
@@ -40,8 +41,20 @@ import socket
 from aiar import __version__ as _AIAR_VERSION
 from aiar.contracts.capabilities import serialize_capabilities
 from aiar.contracts.retrieve import RETRIEVE_SCHEMA_VERSION
-from aiar.llm import OllamaError, active_model, healthcheck, list_models
+from aiar.llm import (
+    ModelNotPulled,
+    OllamaError,
+    active_model,
+    active_model_ready,
+    healthcheck,
+    installed_model_names,
+    list_models,
+    resolve_generation_model,
+    set_active_model,
+)
 from aiar.observability import observer
+
+logger = logging.getLogger(__name__)
 from aiar.rag import store
 from aiar.harness.pipeline import ANSWER_SYSTEM_PROMPT, active_system_prompt, answer_prompt
 from aiar.harness.admin_routes import router as admin_router
@@ -49,7 +62,7 @@ from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.2.4")
+app = FastAPI(title="AIAR harness", version="0.2.5")
 
 # Authenticated remote ingest + instance-management routes (loopback + token).
 # Existing query/eval routes below are unchanged.
@@ -120,6 +133,20 @@ def _trace_debug_enabled() -> bool:
 @app.on_event("startup")
 def _startup() -> None:
     store.init()
+    _warn_if_active_model_unpulled()
+
+
+def _warn_if_active_model_unpulled() -> None:
+    """Loud one-liner at startup if ``active_model`` is not pulled in Ollama, so
+    the operator sees it before the first generation request 4xxs. Only fires
+    when Ollama is reachable (a non-empty installed set); an outage is a separate
+    concern surfaced by ``ollama_reachable``."""
+    names = [m["name"] for m in list_models(show_all=True)]
+    if names and active_model() not in set(names):
+        logger.warning(
+            "AIAR active_model %r is NOT pulled in Ollama (available: %s). "
+            "Generation calls will return model_not_pulled until you `ollama pull` "
+            "it or repoint via POST /services/model.", active_model(), names)
 
 
 class PromptRequest(BaseModel):
@@ -144,15 +171,33 @@ class ServicePromptRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+def _model_not_pulled_http(exc: "ModelNotPulled") -> HTTPException:
+    """409 with a structured, operator-fixable body — distinct from the transient
+    503 ``ollama_error``. Names the model and lists what IS available so the
+    caller can repoint or pull."""
+    return HTTPException(status_code=409, detail={
+        "code": "model_not_pulled",
+        "error": str(exc),
+        "model": exc.model,
+        "available_models": exc.available,
+    })
+
+
 @app.post("/eval/prompt")
 def eval_prompt(req: PromptRequest, rag: bool = True, think: bool = False,
                 reground: bool = False) -> dict:
     try:
+        # Preflight: validate the active model is pulled (Ollama reachable) and
+        # honour the optional auto-fallback, so an unpulled model is an immediate
+        # structured 409 rather than a late, opaque transient failure.
+        model = resolve_generation_model(None)
         return answer_prompt(
             req.prompt, rag=rag, judge=True, think=think,
             reground=True if reground else None, context=req.context or "",
-            instance=req.instance,
+            instance=req.instance, model=model,
         )
+    except ModelNotPulled as exc:
+        raise _model_not_pulled_http(exc)
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
 
@@ -161,6 +206,9 @@ def eval_prompt(req: PromptRequest, rag: bool = True, think: bool = False,
 def service_prompt(req: ServicePromptRequest) -> dict:
     """Generic service-facing prompt endpoint."""
     try:
+        # Preflight: validate the requested (or active) model is pulled and
+        # honour the optional auto-fallback — unpulled -> structured 409.
+        model = resolve_generation_model(req.model)
         result = answer_prompt(
             req.prompt,
             rag=req.rag,
@@ -170,16 +218,37 @@ def service_prompt(req: ServicePromptRequest) -> dict:
             top_k=req.top_k,
             context=req.context or "",
             instance=req.instance,
-            model=req.model,
+            model=model,
             system=req.system,
             endpoint="/services/prompt",
             include_sources=req.sources,
         )
+    except ModelNotPulled as exc:
+        raise _model_not_pulled_http(exc)
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
     result["service_name"] = req.service_name
     result["service_metadata"] = req.metadata or {}
     return result
+
+
+class SetModelRequest(BaseModel):
+    model: str = Field(min_length=1)
+
+
+@app.post("/services/model")
+def set_service_model(req: SetModelRequest,
+                      _: None = Depends(auth.require_token)) -> dict:
+    """Repoint the active generation model at runtime (no redeploy). Authed.
+    Validates against pulled models — an unpulled target returns the same
+    structured ``model_not_pulled`` 409 as the generation path."""
+    try:
+        set_active_model(req.model)
+    except ValueError:
+        raise _model_not_pulled_http(
+            ModelNotPulled(req.model, sorted(installed_model_names())))
+    return {"active_model": active_model(),
+            "active_model_ready": active_model_ready()}
 
 
 class RegroundRequest(BaseModel):
@@ -224,6 +293,11 @@ def healthz() -> dict:
         "remote_ingest": _remote_ingest_enabled(),
         "pure_retrieve": _pure_retrieve_enabled(),
         "retrieve_schema_version": RETRIEVE_SCHEMA_VERSION,
+        # Generation readiness: is the configured model actually pulled? A box can
+        # be "ok" for retrieval/ingest while generation is dead because
+        # active_model points at an unpulled tag.
+        "active_model": active_model(),
+        "active_model_ready": active_model_ready(),
         "rag": rag,
     }
 
@@ -245,6 +319,7 @@ def capabilities() -> dict:
         streaming=False,           # A5
         answer_sources=True,
         call_trace=True,
+        generation=active_model_ready(),
     )
 
 
@@ -295,6 +370,7 @@ def services_meta() -> dict:
         "ok": ollama_ok and rag.get("store_ready"),
         "ollama_reachable": ollama_ok,
         "active_model": active_model(),
+        "active_model_ready": active_model_ready(),
         "available_models": list_models(show_all=True),
         "rag": {
             **rag,
