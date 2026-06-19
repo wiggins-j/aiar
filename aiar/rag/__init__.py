@@ -13,6 +13,8 @@ Public surface:
 from . import store, retriever, ingest, lexical, fusion, reranker, query_rewrite
 from .store import RetrievedChunk
 from .ingest import Chunk
+from .pure_retrieve import retrieve_chunks
+from .ingest_docs import ingest_documents
 
 __all__ = [
     "store",
@@ -24,4 +26,6 @@ __all__ = [
     "query_rewrite",
     "RetrievedChunk",
     "Chunk",
+    "retrieve_chunks",
+    "ingest_documents",
 ]

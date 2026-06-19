@@ -9,6 +9,8 @@
                     "correction": "...", "reason",
                     "instance": "docs"}              the grounding store
     GET  /services/meta                            -> service discovery / runtime state
+    GET  /capabilities                             -> capability manifest (gate features)
+    GET  /calls/{call_id}                          -> redacted trace for a prior call
     GET  /healthz                                  -> readiness snapshot
 
 Run with:  uvicorn aiar.harness.service:app --port 8765
@@ -31,7 +33,15 @@ except Exception as exc:  # pragma: no cover - optional dependency
         "pip install fastapi uvicorn\n(original error: %s)" % exc
     )
 
+import hashlib
+import os
+import socket
+
+from aiar import __version__ as _AIAR_VERSION
+from aiar.contracts.capabilities import serialize_capabilities
+from aiar.contracts.retrieve import RETRIEVE_SCHEMA_VERSION
 from aiar.llm import OllamaError, active_model, healthcheck, list_models
+from aiar.observability import observer
 from aiar.rag import store
 from aiar.harness.pipeline import ANSWER_SYSTEM_PROMPT, active_system_prompt, answer_prompt
 from aiar.harness.admin_routes import router as admin_router
@@ -39,7 +49,7 @@ from aiar.harness import auth
 from aiar.grounding import store as grounding_store
 from aiar.eval.schemas import Verdict
 
-app = FastAPI(title="AIAR harness", version="0.2.3")
+app = FastAPI(title="AIAR harness", version="0.2.4")
 
 # Authenticated remote ingest + instance-management routes (loopback + token).
 # Existing query/eval routes below are unchanged.
@@ -92,6 +102,21 @@ def _pure_retrieve_enabled() -> bool:
     return _pure_retrieve_mounted() and auth._configured_token() is not None
 
 
+def _backend_id() -> str:
+    """Stable identifier for "which AIAR is this app talking to". Deterministic
+    from the DB path + hostname, so it is stable across restarts without needing
+    to persist anything. Carries no secret material."""
+    raw = f"{store._db_path()}|{socket.gethostname()}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _trace_debug_enabled() -> bool:
+    """Local debug flag: when set, ``GET /calls/{id}`` includes prompt/corpus
+    bytes. Off by default — traces are redacted."""
+    return (os.environ.get("AIAR_TRACE_DEBUG", "").strip().lower()
+            in ("1", "true", "yes", "on"))
+
+
 @app.on_event("startup")
 def _startup() -> None:
     store.init()
@@ -114,6 +139,7 @@ class ServicePromptRequest(BaseModel):
     judge: bool = False
     think: bool = False
     reground: bool = False
+    sources: bool = False
     top_k: Optional[int] = Field(default=None, ge=1, le=200)
     metadata: Optional[Dict[str, Any]] = None
 
@@ -147,6 +173,7 @@ def service_prompt(req: ServicePromptRequest) -> dict:
             model=req.model,
             system=req.system,
             endpoint="/services/prompt",
+            include_sources=req.sources,
         )
     except OllamaError as exc:
         raise HTTPException(status_code=503, detail={"code": "ollama_error", "error": str(exc)})
@@ -178,6 +205,10 @@ def reground(req: RegroundRequest) -> dict:
     verdict = Verdict(rating=_score_to_rating(req.score),
                       reason=req.reason or req.correction,
                       failure_tags=[], confidence="high")
+    # Keep the existing /reground response shape byte-identical (Correction echo:
+    # rating/ts). The new product-safe ``record_grounding`` API is available for
+    # callers that want answer/correction separation; this legacy endpoint stays
+    # on the legacy writer (which persists data the new lookup reads back fine).
     rec = grounding_store.record(
         req.prompt, verdict, correction=req.correction, instance=req.instance)
     return {"ok": True, "recorded": rec.to_dict()}
@@ -192,8 +223,61 @@ def healthz() -> dict:
         "ollama_reachable": ollama_ok,
         "remote_ingest": _remote_ingest_enabled(),
         "pure_retrieve": _pure_retrieve_enabled(),
+        "retrieve_schema_version": RETRIEVE_SCHEMA_VERSION,
         "rag": rag,
     }
+
+
+@app.get("/capabilities")
+def capabilities() -> dict:
+    """Capability manifest (``aiar.capabilities.v1``). Consumers gate UI
+    affordances on this, never on the version string. ``features`` come from the
+    same live predicates ``/healthz`` uses (mounted AND usable), so the manifest
+    can't claim a capability this process can't serve."""
+    return serialize_capabilities(
+        aiar_version=_AIAR_VERSION,
+        backend_id=_backend_id(),
+        pure_retrieve=_pure_retrieve_enabled(),
+        remote_ingest=_remote_ingest_enabled(),
+        grounding_v1=True,
+        semantic_grounding=False,  # A5, deferred
+        judge_only=False,          # A5
+        streaming=False,           # A5
+        answer_sources=True,
+        call_trace=True,
+    )
+
+
+@app.get("/calls/{call_id}")
+def call_trace(call_id: str) -> dict:
+    """Compact, redacted trace for a prior call. Best-effort and process-local:
+    traces are date-partitioned JSONL with a FIFO cap, so old ``call_id``s age
+    out (404). Prompt/corpus bytes are redacted unless ``AIAR_TRACE_DEBUG`` is
+    set — token counts and ``call_id`` are never redacted."""
+    event = observer.read_by_call_id(call_id)
+    if event is None:
+        raise HTTPException(status_code=404,
+                            detail={"code": "unknown_call", "error": call_id})
+    debug = _trace_debug_enabled()
+    redacted = "[redacted: set AIAR_TRACE_DEBUG to reveal]"
+    err = event.get("error")
+    trace = {
+        "call_id": event.get("call_id"),
+        "timestamp": event.get("timestamp"),
+        "endpoint": event.get("endpoint"),
+        "model": event.get("model"),
+        "think": event.get("think"),
+        "done_reason": event.get("done_reason"),
+        "prompt_tokens": event.get("prompt_tokens"),
+        "completion_tokens": event.get("completion_tokens"),
+        "latency_ms": event.get("latency_ms"),
+        "error": err,
+        "debug": debug,
+    }
+    for key in ("raw_prompt", "system_prompt", "user_prompt",
+                "response_text", "thinking"):
+        trace[key] = event.get(key) if debug else redacted
+    return trace
 
 
 @app.get("/services/meta")

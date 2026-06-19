@@ -95,11 +95,27 @@ def _retrieve_texts(query: str, k: int, *, rerank: bool, where: "dict | None" = 
     return [c.text for c in cands]
 
 
+def _retrieve_chunk_objs(query: str, k: int, *, rerank: bool,
+                         where: "dict | None" = None,
+                         instance: "str | None" = None
+                         ) -> List[store.RetrievedChunk]:
+    """Top-k chunk OBJECTS actually used (post hybrid/rerank/truncate). Same
+    selection as ``_retrieve_texts`` but returns the scored chunks so a caller
+    can report the answerer's real source set (``answer_prompt`` sources)."""
+    n = int(rag_settings.get("fetch_k")) if rerank else k
+    cands = _retrieve_candidates(query, max(n, k), where=where, instance=instance)
+    if rerank:
+        from aiar.rag import reranker
+        return reranker.rerank(query, cands, k)
+    return cands[:k]
+
+
 def get_context(query: str, *, instance: "str | None" = None,
                 top_k: "int | None" = None,
                 rerank: "bool | None" = None,
                 where: "dict | None" = None,
-                rewrite: bool = True) -> str:
+                rewrite: bool = True,
+                capture: "dict | None" = None) -> str:
     """Return a labelled context block for a free-form ``query``.
 
     Returns an empty string if RAG is unavailable, the store is empty, the
@@ -114,6 +130,8 @@ def get_context(query: str, *, instance: "str | None" = None,
     ``where``  : optional ChromaDB metadata filter (e.g. {"category": "faq"}).
     ``rewrite``: when True, honour ``RAG_QUERY_REWRITE_MODE`` (off -> no-op);
                  pass False to skip the extra rewrite LLM call entirely.
+    ``capture``: optional dict; when given, ``capture["chunks"]`` is set to the
+                 list of ``RetrievedChunk`` actually used (for answer sources).
     """
     if instance == NO_RAG:
         return ""
@@ -137,10 +155,18 @@ def get_context(query: str, *, instance: "str | None" = None,
         retrieval_query = query
 
     try:
-        chunks = _retrieve_texts(retrieval_query, k, rerank=do_rerank,
-                                 where=where, instance=instance)
+        if capture is not None:
+            objs = _retrieve_chunk_objs(retrieval_query, k, rerank=do_rerank,
+                                        where=where, instance=instance)
+            capture["chunks"] = objs
+            chunks = [c.text for c in objs]
+        else:
+            chunks = _retrieve_texts(retrieval_query, k, rerank=do_rerank,
+                                     where=where, instance=instance)
     except Exception as exc:
         logger.debug("get_context: query failed: %s", exc)
+        if capture is not None:
+            capture.setdefault("chunks", [])
         return ""
 
     if not chunks:

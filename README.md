@@ -97,6 +97,29 @@ system stops re-making the same mistake — your corrections compound.
 - `aiar.observability` — call IDs, latency, and retrieval traces for
   every answer.
 
+## Integration contracts (for apps built on AIAR)
+
+AIAR exposes stable, schema-versioned contracts so a consuming app can use the
+framework's truth (retrieval, grounding, ingest readiness, telemetry) instead of
+reimplementing it. Each shape has **one serializer** shared by the in-process
+Python API and the HTTP route, so local and remote callers get identical
+payloads. See [docs/integration-contracts.md](docs/integration-contracts.md)
+for the frozen field-level shapes.
+
+- **Pure retrieval** (`aiar.retrieve.v1`) — `aiar.rag.retrieve_chunks(query, *,
+  instance, k=8, category=None)` and `GET/POST /instances/{instance}/retrieve`.
+  Raw vector similarity; **never invokes a generation model**.
+- **Grounding** (`aiar.grounding.v1`) — `aiar.grounding.record_grounding(...)` /
+  `lookup_grounding(...)`, keeping `answer` and `correction` distinct and scoping
+  records per instance. Legacy records remain readable.
+- **Ingest result + readiness** (`aiar.ingest.v1`) — `aiar.rag.ingest_documents(
+  documents, *, instance, publish=False)`; `health(instance)` reports
+  `published`, `chunk_count`, `last_ingest_at`, `last_ingest_error`.
+- **Telemetry + capability manifest** — `answer_prompt(..., include_sources=True)`
+  attaches the answerer's source set; `GET /capabilities` returns the feature
+  manifest a consumer gates on (never a version string); `GET /calls/{call_id}`
+  returns a redacted trace; `/healthz` carries `retrieve_schema_version`.
+
 ## Configuration
 
 AIAR reads `AIAR_*` environment variables for runtime configuration —

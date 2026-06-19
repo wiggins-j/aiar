@@ -18,11 +18,14 @@ import logging
 import os
 import re
 import threading
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Sequence, Union
+
+from aiar.contracts.grounding import GroundingRecord
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +84,31 @@ class Correction:
         )
 
 
+def _record_from_entry(signature: str, normalized: str,
+                       instance: Optional[str], e: dict, idx: int) -> GroundingRecord:
+    """Build a GroundingRecord from a stored entry, tolerating both new
+    (``record_grounding``) and legacy (``record``) shapes."""
+    rid = str(e.get("id") or f"{_signature_hash(normalized)}-{idx}")
+    verdict = str(e.get("verdict") or e.get("rating") or "")
+    created = str(e.get("created_at") or e.get("ts") or "")
+    entry_instance = e.get("instance")
+    return GroundingRecord(
+        id=rid,
+        signature=str(e.get("signature") or signature),
+        normalized=str(e.get("normalized") or normalized),
+        verdict=verdict,
+        correction=str(e.get("correction") or ""),
+        instance=entry_instance if entry_instance is not None else instance,
+        reason=str(e.get("reason") or ""),
+        answer=e.get("answer"),
+        prompt=e.get("prompt"),
+        source_chunks=list(e.get("source_chunks") or []),
+        failure_tags=list(e.get("failure_tags") or []),
+        confidence=str(e.get("confidence") or "medium"),
+        created_at=created,
+    )
+
+
 _WS_RE = re.compile(r"\s+")
 
 
@@ -119,6 +147,7 @@ class GroundingStore:
         raw = Path(base).expanduser() if base is not None else default_base_dir()
         root = raw / _SUBDIR
         self._root = (root / instance) if instance else root
+        self._instance = instance
         self._lock = threading.Lock()
 
     @property
@@ -184,6 +213,89 @@ class GroundingStore:
             return []
         return [Correction.from_dict(e) for e in entries if isinstance(e, dict)]
 
+    # --- product-safe grounding API (aiar.grounding.v1) --------------------
+
+    def record_grounding(self, *, signature: str, verdict: object,
+                         correction: str = "", answer: Optional[str] = None,
+                         prompt: Optional[str] = None,
+                         source_chunks: Optional[Sequence[str]] = None
+                         ) -> GroundingRecord:
+        """Persist a :class:`GroundingRecord` for ``signature``.
+
+        ``answer`` (what was wrong) and ``correction`` (the fix) are stored as
+        SEPARATE fields — a consumer can never accidentally write the answer into
+        the correction slot. ``verdict`` is duck-typed against
+        :class:`aiar.eval.schemas.Verdict` (``rating``/``reason``/...), or may be a
+        plain rating string. The record appends to the same per-signature file the
+        legacy ``record`` path uses, with compatible keys, so ``reinject`` and the
+        legacy ``lookup`` keep reading it.
+        """
+        normalized = normalize_signature(signature)
+        if hasattr(verdict, "rating"):
+            rating = str(getattr(verdict, "rating", "") or "")
+            reason = str(getattr(verdict, "reason", "") or "")
+            failure_tags = list(getattr(verdict, "failure_tags", []) or [])
+            confidence = str(getattr(verdict, "confidence", "medium") or "medium")
+        else:
+            rating = str(verdict or "")
+            reason = ""
+            failure_tags = []
+            confidence = "medium"
+        rec = GroundingRecord(
+            id=uuid.uuid4().hex,
+            signature=signature,
+            normalized=normalized,
+            verdict=rating,
+            correction=correction or "",
+            instance=self._instance,
+            reason=reason,
+            answer=answer,
+            prompt=prompt,
+            source_chunks=list(source_chunks or []),
+            failure_tags=failure_tags,
+            confidence=confidence,
+            created_at=_iso_now(),
+        )
+        entry = rec.to_dict()
+        # Legacy-compatible alias so Correction.from_dict / reinject still read it.
+        entry["rating"] = rating
+        entry["ts"] = rec.created_at
+        with self._lock:
+            self._root.mkdir(parents=True, exist_ok=True)
+            path = self._path_for(normalized)
+            data = self._read_file(path)
+            entries = data.get("corrections")
+            if not isinstance(entries, list):
+                entries = []
+            entries.append(entry)
+            payload = {"signature": signature, "normalized": normalized,
+                       "corrections": entries}
+            tmp = path.with_suffix(".json.tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+        return rec
+
+    def lookup_grounding(self, signature: str) -> List[GroundingRecord]:
+        """Return all grounding records for ``signature`` (newest last).
+
+        Reads both records written through ``record_grounding`` and legacy records
+        written through the old positional ``record`` path — legacy records read
+        back with ``answer=None`` and the original text left in ``correction``
+        (never rewritten).
+        """
+        normalized = normalize_signature(signature)
+        data = self._read_file(self._path_for(normalized))
+        entries = data.get("corrections")
+        if not isinstance(entries, list):
+            return []
+        out: List[GroundingRecord] = []
+        for idx, e in enumerate(entries):
+            if isinstance(e, dict):
+                out.append(_record_from_entry(signature, normalized,
+                                              self._instance, e, idx))
+        return out
+
 
 # --------------------------------------------------------------------------
 # Module-level convenience seam
@@ -228,3 +340,32 @@ def lookup(signature: str, *, base: Optional[Union[str, Path]] = None,
     else:
         store = _default_store()
     return store.lookup(signature)
+
+
+def record_grounding(*, signature: str, verdict: object, correction: str = "",
+                     instance: Optional[str] = None, answer: Optional[str] = None,
+                     prompt: Optional[str] = None,
+                     source_chunks: Optional[Sequence[str]] = None,
+                     base: Optional[Union[str, Path]] = None) -> GroundingRecord:
+    """Record a grounding (product-safe API). ``answer`` and ``correction`` stay
+    distinct. ``base`` pins the store root (tmp path in tests); ``instance`` scopes
+    the record to a RAG instance subdir."""
+    if base is not None or instance is not None:
+        store = GroundingStore(base, instance=instance)
+    else:
+        store = _default_store()
+    return store.record_grounding(
+        signature=signature, verdict=verdict, correction=correction,
+        answer=answer, prompt=prompt, source_chunks=source_chunks)
+
+
+def lookup_grounding(*, signature: str, instance: Optional[str] = None,
+                     base: Optional[Union[str, Path]] = None
+                     ) -> List[GroundingRecord]:
+    """Look up grounding records (product-safe API). Reads both new and legacy
+    records. ``base`` pins the store root; ``instance`` scopes the lookup."""
+    if base is not None or instance is not None:
+        store = GroundingStore(base, instance=instance)
+    else:
+        store = _default_store()
+    return store.lookup_grounding(signature)

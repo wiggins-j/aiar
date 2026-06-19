@@ -11,21 +11,22 @@ This module is intentionally thin: it wraps existing ``aiar.rag.store`` /
 """
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from aiar.contracts.ingest import status_for
+from aiar.contracts.retrieve import RetrieveError
 from aiar.harness import ingest_jobs
 from aiar.harness.auth import require_token
 from aiar.rag import ingest, instances, store
+from aiar.rag.ingest_docs import apply_documents, record_ingest_safe
+from aiar.rag.pure_retrieve import retrieve_chunks
 
 # Request caps: clients should page above these.
 _MAX_DOCS = 200
 _MAX_BYTES = 8 * 1024 * 1024  # 8 MB of document text per request
-_RETRIEVE_DEFAULT_K = 8
-_RETRIEVE_MAX_K = 50
 
 router = APIRouter(dependencies=[Depends(require_token)])
 
@@ -83,14 +84,6 @@ def _require_writable() -> None:
                             detail={"code": exc.code, "error": str(exc)})
 
 
-def _require_readable() -> None:
-    try:
-        store.ensure_readable()
-    except store.StoreNotReady as exc:
-        raise HTTPException(status_code=503,
-                            detail={"code": exc.code, "error": str(exc)})
-
-
 def _doc_bytes(doc: DocumentIn) -> int:
     n = len((doc.text or "").encode("utf-8"))
     for p in (doc.pages or []):
@@ -98,79 +91,16 @@ def _doc_bytes(doc: DocumentIn) -> int:
     return n
 
 
-def _normalize_retrieve_k(k: Optional[int]) -> int:
-    value = _RETRIEVE_DEFAULT_K if k is None else int(k)
-    if value < 1:
-        return 1
-    if value > _RETRIEVE_MAX_K:
-        return _RETRIEVE_MAX_K
-    return value
-
-
-def _parse_page_span(value: Any) -> Optional[List[int]]:
-    if value is None or value == "":
-        return None
-    raw = value
-    if isinstance(value, str):
-        try:
-            raw = json.loads(value)
-        except ValueError:
-            return None
-    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
-        return None
-    try:
-        return [int(raw[0]), int(raw[1])]
-    except (TypeError, ValueError):
-        return None
-
-
-def _optional_int(value: Any) -> Optional[int]:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _retrieve_hit_to_dict(hit) -> dict:
-    meta = dict(hit.metadata or {})
-    return {
-        "chunk_id": hit.id,
-        "source": str(meta.get("source") or ""),
-        "title": str(meta.get("title") or ""),
-        "text": hit.text,
-        "score": hit.score,
-        "chunk_index": _optional_int(meta.get("index")),
-        "category": str(meta.get("category") or "general"),
-        "page_span": _parse_page_span(meta.get("page_span")),
-        "metadata": meta,
-    }
-
-
 def _retrieve_response(instance: str, q: str, k: Optional[int],
                        category: Optional[str]) -> dict:
-    query = (q or "").strip()
-    if not query:
-        raise HTTPException(400, {"code": "empty_query", "error": "q is required"})
-    desc = _resolve_desc(instance)
-    if desc is None or desc.status != "published":
-        raise HTTPException(404, {"code": "unknown_instance", "error": instance})
-    top_k = _normalize_retrieve_k(k)
-    _require_readable()
-    category_filter = (category or "").strip() or None
-    where = {"category": category_filter} if category_filter else None
-    hits = store.query_scored(query, n_results=top_k, where=where, instance=desc.name)
-    out = [_retrieve_hit_to_dict(h) for h in hits]
-    return {
-        "instance": desc.name,
-        "query": query,
-        "k": top_k,
-        "score_kind": "cosine_similarity",
-        "score_order": "desc",
-        "hits": out,
-        "count": len(out),
-    }
+    """Thin HTTP adapter over the ``retrieve_chunks`` twin: identical payload,
+    typed errors mapped to status codes. No retrieval logic lives here."""
+    try:
+        return retrieve_chunks(q, instance=instance, k=k, category=category)
+    except RetrieveError as exc:
+        raise HTTPException(exc.http_status, {"code": exc.code, "error": exc.message})
+    except store.StoreNotReady as exc:
+        raise HTTPException(503, {"code": exc.code, "error": str(exc)})
 
 
 # --- instance management ----------------------------------------------------
@@ -254,39 +184,32 @@ def ingest_documents(instance: str, req: IngestRequest) -> dict:
                                   "error": f"max {_MAX_BYTES} bytes of text per request"})
 
     job = ingest_jobs.new_job(name, documents_total=len(req.documents))
-    publish_failed = False
-    for doc in req.documents:
-        try:
-            chunks = ingest.ingest_document(
-                source=doc.source, title=doc.title or doc.source,
-                text=doc.text, pages=doc.pages, category=doc.category,
-                metadata={**(doc.metadata or {}), "doc_id": doc.doc_id})
-            if not chunks:
-                job.errors.append({"doc_id": doc.doc_id, "error": "no usable text"})
-                continue
-            # Idempotency lives in store.add: it skips re-embedding chunks whose
-            # document_hash + count are unchanged, so a re-posted document adds 0.
-            added = store.add(chunks, instance=name)
-            job.chunks_added += added
-            job.duplicates += len(chunks) - added
-        except Exception as exc:  # one bad doc never aborts the batch
-            job.errors.append({"doc_id": doc.doc_id, "error": str(exc)})
+    # Shared per-document loop (same code path as the synchronous twin).
+    added, dups, errors = apply_documents(name, req.documents,
+                                          store=store, ingest=ingest)
+    job.chunks_added = added
+    job.duplicates = dups
+    job.errors.extend(errors)
 
     # Publish only if requested AND the batch wasn't a total failure — don't flip
     # a brand-new draft to published when nothing landed and docs errored. A
     # re-ingest of all-duplicates (0 added, no errors) is a legitimate publish.
+    publish_failed = False
     if req.publish and not (job.chunks_added == 0 and job.errors):
         try:
             store.publish_instance(name)
+            job.published = True
         except Exception as exc:
             publish_failed = True
             job.errors.append({"doc_id": None, "error": f"publish failed: {exc}"})
 
-    # "failed" if the requested publish failed, or nothing was stored despite
-    # errors (never report success when no chunks landed — AC#4). All-duplicates
-    # with no errors is a legitimate idempotent no-op, so that stays "done".
-    failed = publish_failed or (job.chunks_added == 0 and bool(job.errors))
-    ingest_jobs.finish(job, "failed" if failed else "done")
+    # status_for is the single source of truth (contract §3): nothing stored
+    # despite errors -> "failed"; all-duplicate no-op -> "done"; partial -> "done"
+    # with a non-empty errors list the client must surface.
+    status = status_for(chunks_added=job.chunks_added, errors=job.errors,
+                        publish_failed=publish_failed)
+    ingest_jobs.finish(job, status)
+    record_ingest_safe(store, name, job.errors)
     return {"job_id": job.job_id, "accepted": len(req.documents), "instance": name}
 
 

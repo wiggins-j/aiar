@@ -280,6 +280,19 @@ def publish_instance(name: str) -> None:
     _registry.publish(_canonical_existing(name))
 
 
+def record_ingest(name: str, *, error: Optional[str] = None) -> None:
+    """Stamp last-ingest readiness state for ``name`` (surfaced in ``health``).
+    Best-effort: never raises — readiness telemetry must not break an ingest."""
+    if _registry is None:
+        init()
+    if _registry is None:
+        return
+    try:
+        _registry.record_ingest(_canonical_existing(name), error=error)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("store: record_ingest(%s) failed: %s", name, exc)
+
+
 def delete_instance(name: str) -> dict:
     """Delete a RAG instance: drop its ChromaDB collection, registry entry, and
     cached collection handle + BM25 index. The ``default`` instance, the ``none``
@@ -393,12 +406,14 @@ def health(*, instance: Optional[str] = None) -> dict:
     _sync_registry()
     active = active_instance()
     target = _resolve(instance) if instance is not None else active
+    desc = None
     if _registry is not None:
         try:
             canonical = _registry.resolve(target) or target
         except ValueError:
             canonical = target
         instance_names = _registry.names()
+        desc = _registry.get(canonical)
     else:
         canonical = target
         instance_names = []
@@ -412,6 +427,10 @@ def health(*, instance: Optional[str] = None) -> dict:
         "instance_count": len(instance_names),
         "instances": instance_names,
         "chunk_count": chunk_count(instance=canonical) if _available else None,
+        # Index-readiness: a consumer can tell "ready" from "ingest failed".
+        "published": (desc.status == "published") if desc is not None else False,
+        "last_ingest_at": getattr(desc, "last_ingest_at", None) if desc else None,
+        "last_ingest_error": getattr(desc, "last_ingest_error", None) if desc else None,
     }
 
 

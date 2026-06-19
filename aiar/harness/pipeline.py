@@ -17,6 +17,7 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
+from aiar.contracts.capabilities import ANSWER_SCHEMA_VERSION
 from aiar.llm import call_ollama, OllamaError
 from aiar.observability import observer
 from aiar import runtime_state
@@ -117,6 +118,7 @@ def answer_prompt(
     retrieval_where: Optional[Dict[str, Any]] = None,
     rewrite: bool = True,
     judge_criteria: Optional[str] = None,
+    include_sources: bool = False,
 ) -> Dict[str, Any]:
     """Answer ``prompt`` through the full harness pipeline.
 
@@ -160,13 +162,17 @@ def answer_prompt(
 
     # 1. Retrieve once from the selected instance. The judge always scores
     #    against this; ?rag= only blinds the answerer.
+    source_capture: Dict[str, Any] = {}
+    _ctx_kwargs: Dict[str, Any] = dict(
+        top_k=top_k, instance=instance, where=retrieval_where, rewrite=rewrite)
+    if include_sources:
+        # Only thread ``capture`` when sources are requested, so the common path
+        # (and stubs) keep the original get_context signature.
+        _ctx_kwargs["capture"] = source_capture
     try:
         retrieved = get_context(
             retrieval_query if retrieval_query is not None else prompt,
-            top_k=top_k,
-            instance=instance,
-            where=retrieval_where,
-            rewrite=rewrite,
+            **_ctx_kwargs,
         ) or ""
     except Exception:  # pragma: no cover - defensive; RAG must never break here
         retrieved = ""
@@ -279,7 +285,8 @@ def answer_prompt(
         retrieval_cfg["top_k"] = top_k
     retrieval_cfg["rag"] = bool(rag)
 
-    return {
+    result: Dict[str, Any] = {
+        "schema_version": ANSWER_SCHEMA_VERSION,
         "answer": answer,
         "reasoning": reasoning,
         "verdict": verdict_dict,
@@ -294,3 +301,11 @@ def answer_prompt(
         "system_source": system_source,
         "retrieval": retrieval_cfg,
     }
+    if include_sources:
+        # The corpus evidence retrieved for this call, serialized with the same
+        # aiar.retrieve.v1 hit shape. ``grounded``/``rag_enabled`` say whether the
+        # ANSWERER actually used it (vs. judge-only).
+        from aiar.contracts.retrieve import serialize_hit
+        result["sources"] = [serialize_hit(c)
+                             for c in source_capture.get("chunks", [])]
+    return result
