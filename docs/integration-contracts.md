@@ -138,8 +138,46 @@ How a consumer decides what's available — derived from live predicates (mounte
 }
 ```
 
-`/healthz` additionally exposes `pure_retrieve`, `remote_ingest`, and
-`retrieve_schema_version`.
+`/healthz` additionally exposes `pure_retrieve`, `remote_ingest`,
+`retrieve_schema_version`, `active_model`, and `active_model_ready`.
+
+## 6. Active model — selection, readiness, and the `model_not_pulled` error
+
+Generation calls resolve a model in this precedence:
+
+1. explicit per-request `model` (e.g. `POST /services/prompt {"model": "..."}`),
+2. the process-active model (runtime-settable, see below),
+3. `OLLAMA_MODEL` env (the boot seed),
+4. built-in default.
+
+**Set it without a redeploy:** `POST /services/model {"model": "qwen3.5:9b"}`
+(authed). It validates the target is pulled in Ollama and flips the active model
+live; an unpulled target returns the structured 409 below. The Python equivalent
+is `aiar.llm.set_active_model(name)`.
+
+**Readiness is observable before a request fails.** `/healthz` and
+`/services/meta` carry `active_model` + `active_model_ready: bool`, and
+`/capabilities` carries `features.generation`. A box can be `ok` for
+retrieval/ingest while `active_model_ready` is `false` because the configured
+model isn't pulled — generation will fail until you `ollama pull` it or repoint.
+
+**Unpulled model → structured, operator-fixable error** (a 4xx, distinct from the
+transient `ollama_error` 503):
+
+```jsonc
+// 409
+{ "detail": {
+    "code": "model_not_pulled",
+    "error": "model not pulled: 'qwen2.5:7b' (available: [...])",
+    "model": "qwen2.5:7b",
+    "available_models": ["gemma3:27b", "qwen3.5:9b", "nomic-embed-text"]
+} }
+```
+
+**Optional auto-fallback:** set `AIAR_ACTIVE_MODEL_FALLBACK=auto` (default OFF) to
+substitute the smallest pulled non-embedding model when the configured active
+model is missing (logged loudly; embedding models are excluded). AIAR never
+auto-`ollama pull`s — pulling a multi-GB model is the operator's call.
 
 ## Error `code` vocabulary
 

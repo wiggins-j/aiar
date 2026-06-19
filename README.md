@@ -119,6 +119,11 @@ for the frozen field-level shapes.
   attaches the answerer's source set; `GET /capabilities` returns the feature
   manifest a consumer gates on (never a version string); `GET /calls/{call_id}`
   returns a redacted trace; `/healthz` carries `retrieve_schema_version`.
+- **Active-model reliability** — `active_model_ready` on `/healthz` &
+  `/services/meta` and `features.generation` on `/capabilities` flag when the
+  configured model isn't pulled; generation then returns a structured
+  `model_not_pulled` 4xx (not an opaque 503). Repoint live with authed
+  `POST /services/model`, or opt into `AIAR_ACTIVE_MODEL_FALLBACK=auto`.
 
 ## Configuration
 

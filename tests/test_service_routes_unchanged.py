@@ -16,6 +16,8 @@ def client(monkeypatch):
     monkeypatch.setattr(service, "answer_prompt",
                         lambda prompt, **kw: {"answer": "ok", "grounded": kw.get("rag", True)})
     monkeypatch.setattr(service, "healthcheck", lambda: True)
+    # Offline preflight: identity resolver so the route doesn't reach Ollama.
+    monkeypatch.setattr(service, "resolve_generation_model", lambda m=None: m)
     monkeypatch.setattr(service.store, "health", lambda: {"store_ready": True})
     monkeypatch.setattr(service.store, "init", lambda: None)  # no chromadb on startup
     return TestClient(service.app)

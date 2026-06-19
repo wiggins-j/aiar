@@ -32,6 +32,7 @@ def test_service_prompt_passes_endpoint_and_request_options(monkeypatch, shared_
         return {"answer": "ok", "grounded": True}
 
     monkeypatch.setattr(service, "answer_prompt", fake_answer_prompt)
+    monkeypatch.setattr(service, "resolve_generation_model", lambda m=None: m)
     req = service.ServicePromptRequest(
         service_name="LocalApp",
         prompt="hello",

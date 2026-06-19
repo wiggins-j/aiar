@@ -22,7 +22,8 @@ def serialize_capabilities(*, aiar_version: str, backend_id: str,
                            semantic_grounding: bool = False,
                            judge_only: bool = False, streaming: bool = False,
                            answer_sources: bool = True,
-                           call_trace: bool = True) -> dict:
+                           call_trace: bool = True,
+                           generation: bool = True) -> dict:
     """Serialize the ``aiar.capabilities.v1`` manifest."""
     return {
         "schema_version": CAPABILITIES_SCHEMA_VERSION,
@@ -37,6 +38,8 @@ def serialize_capabilities(*, aiar_version: str, backend_id: str,
             "streaming": bool(streaming),                    # A5
             "answer_sources": bool(answer_sources),
             "call_trace": bool(call_trace),
+            # Generation readiness: is the active model actually pulled?
+            "generation": bool(generation),
         },
         "schemas": {
             "retrieve": RETRIEVE_SCHEMA_VERSION,

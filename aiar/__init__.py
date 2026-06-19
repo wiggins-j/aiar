@@ -8,5 +8,5 @@ This package is deliberately free of any application/domain logic — it is the
 generic core extracted to be reused against any corpus.
 """
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 __license__ = "Apache-2.0"

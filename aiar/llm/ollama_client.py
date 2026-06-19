@@ -13,6 +13,7 @@ of the answer and surface the reasoning separately via ``capture``.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 import time
@@ -23,6 +24,8 @@ import requests
 from aiar.observability import observer
 from aiar.observability.observer import _THINK_BLOCK_RE
 from aiar import runtime_state
+
+logger = logging.getLogger(__name__)
 
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
@@ -40,7 +43,22 @@ _LENGTH_RETRY_TIMEOUT_CAP_S = 300
 
 
 class OllamaError(Exception):
-    """Wraps any Ollama call failure (including timeout)."""
+    """Wraps any Ollama call failure (including timeout) — typically transient
+    (Ollama down, timeout, network). Maps to a 503 at the HTTP layer."""
+
+
+class ModelNotPulled(Exception):
+    """The model a generation call needs is not pulled in Ollama, even though
+    Ollama is reachable. Distinct from :class:`OllamaError`: this is an
+    operator-fixable configuration state (pull it, or repoint ``active_model``),
+    not a transient failure — the HTTP layer maps it to a 4xx with a structured
+    ``model_not_pulled`` code that names the model and lists what IS available."""
+
+    def __init__(self, model: str, available: "list[str]") -> None:
+        super().__init__(
+            f"model not pulled: {model!r} (available: {available})")
+        self.model = model
+        self.available = list(available)
 
 
 # --------------------------------------------------------------------------
@@ -73,6 +91,79 @@ def set_active_model(name: str) -> None:
     global _active_model
     _active_model = name
     runtime_state.set_value("active_model", name)
+
+
+def installed_model_names() -> "set[str]":
+    """Names of every model pulled in Ollama (unfiltered). Empty set when Ollama
+    is unreachable — callers must treat empty as "unknown", not "none pulled"."""
+    return {m["name"] for m in list_models(show_all=True)}
+
+
+def active_model_ready() -> bool:
+    """True iff the active model is actually pulled in Ollama right now. False
+    when Ollama is unreachable or the configured model is not pulled — i.e. a
+    generation call would fail. Cheap, never raises."""
+    names = installed_model_names()
+    return bool(names) and active_model() in names
+
+
+def _is_embedding_model(m: dict) -> bool:
+    """Heuristic: exclude embedding models from generation auto-selection. Covers
+    the nomic embed family and any ``*embed*`` / ``*-bert`` tag."""
+    name = (m.get("name") or "").lower()
+    family = (m.get("family") or "").lower()
+    return "embed" in name or "bert" in family or family == "nomic-bert"
+
+
+def _fallback_enabled() -> bool:
+    """``AIAR_ACTIVE_MODEL_FALLBACK=auto`` opts into substituting the smallest
+    pulled generation model when the configured active model is missing.
+    Default OFF — a silent model swap is opt-in, never the default."""
+    return os.environ.get("AIAR_ACTIVE_MODEL_FALLBACK", "").strip().lower() == "auto"
+
+
+def _smallest_generation_model(installed: "list[dict]") -> Optional[str]:
+    cands = [m for m in installed if not _is_embedding_model(m)]
+    if not cands:
+        return None
+    cands.sort(key=lambda m: (m.get("size_bytes") or float("inf"), m["name"]))
+    return cands[0]["name"]
+
+
+def resolve_generation_model(model: Optional[str] = None) -> str:
+    """Resolve the model a generation call should use, validating it is pulled.
+
+    - ``model`` given: that explicit override (must be pulled, else ModelNotPulled).
+    - ``model`` None: the process-active model.
+
+    Behaviour when the target is not pulled but Ollama IS reachable:
+    - ``AIAR_ACTIVE_MODEL_FALLBACK=auto`` AND no explicit override -> substitute
+      the smallest pulled non-embedding model, persist it as active, log loudly.
+    - otherwise -> raise :class:`ModelNotPulled`.
+
+    When Ollama is unreachable (no installed set), return the target unchanged so
+    the call layer surfaces a transient :class:`OllamaError` (503) rather than
+    mislabeling an outage as a not-pulled config error.
+    """
+    target = model if model is not None else active_model()
+    installed = list_models(show_all=True)
+    names = {m["name"] for m in installed}
+    if not names:
+        return target  # Ollama unreachable -> let the call layer 503, don't mislabel
+    if target in names:
+        return target
+    if _fallback_enabled() and model is None:
+        alt = _smallest_generation_model(installed)
+        if alt:
+            logger.warning(
+                "active model %r is not pulled; falling back to %r "
+                "(AIAR_ACTIVE_MODEL_FALLBACK=auto)", target, alt)
+            try:
+                set_active_model(alt)
+            except ValueError:  # pragma: no cover - alt came from the installed set
+                pass
+            return alt
+    raise ModelNotPulled(target, sorted(names))
 
 
 def _model_prefixes() -> "list[str]":
