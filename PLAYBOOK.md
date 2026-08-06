@@ -59,7 +59,7 @@ AIAR is **model-agnostic** — it works with any Qwen model you have pulled.
 ollama serve &
 
 # Pull a Qwen model sized to your hardware (see the table below). Examples:
-ollama pull qwen2.5:7b                  # balanced default
+ollama pull qwen3.5:9b                  # balanced default
 #   ollama pull qwen2.5:3b              # smaller / faster, great for laptops
 #   ollama pull qwen3:14b              # larger / slower / stronger
 
@@ -74,7 +74,8 @@ guidance — CPU-only works at every size, just slower):
 |---|---|---|---|---|
 | ~1.5B | `qwen2.5:1.5b` | ~2 GB | ~2 GB | tiny boxes, smoke tests |
 | ~3B | `qwen2.5:3b` | ~4 GB | ~4 GB | laptops, fast iteration |
-| ~7–8B | `qwen2.5:7b`, `qwen3:8b` | ~8 GB | ~6 GB | **balanced default** |
+| ~7–8B | `qwen2.5:7b`, `qwen3:8b` | ~8 GB | ~6 GB | small GPUs / older boxes |
+| ~9B | `qwen3.5:9b` | ~10 GB | ~8 GB | **balanced default** |
 | ~14B | `qwen2.5:14b`, `qwen3:14b` | ~16 GB | ~12 GB | stronger reasoning |
 | ~32B | `qwen2.5:32b`, `qwen3:32b` | ~32 GB | ~24 GB | workstation / server |
 | ~72B | `qwen2.5:72b` | ~48 GB+ | 2×24 GB | multi-GPU server |
@@ -118,8 +119,8 @@ retry.
 Point AIAR at the model you pulled (this is the ONLY model setting):
 
 ```bash
-export OLLAMA_MODEL="qwen2.5:7b"       # whatever you pulled in step 1
-#   Windows (PowerShell):  $env:OLLAMA_MODEL="qwen2.5:7b"
+export OLLAMA_MODEL="qwen3.5:9b"       # whatever you pulled in step 1
+#   Windows (PowerShell):  $env:OLLAMA_MODEL="qwen3.5:9b"
 ```
 
 Verify the install before ingesting:
@@ -409,7 +410,7 @@ curl -s -X POST localhost:8765/services/prompt \
         "service_name":"LocalApp",
         "prompt":"Answer from the currently configured docs.",
         "instance":"default",
-        "model":"qwen2.5:7b",
+        "model":"qwen3.5:9b",
         "rag":true,
         "judge":false
       }'
@@ -470,7 +471,7 @@ curl -s -X POST localhost:8088/api/evaluation/clear \
 curl -s localhost:8088/api/models
 curl -s -X POST localhost:8088/api/models/active \
   -H 'content-type: application/json' \
-  -d '{"model":"qwen2.5:7b"}'
+  -d '{"model":"qwen3.5:9b"}'
 curl -s localhost:8088/api/rag/instances
 curl -s -X POST localhost:8088/api/rag/active \
   -H 'content-type: application/json' \

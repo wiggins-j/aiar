@@ -29,7 +29,7 @@ daemon (default `http://127.0.0.1:11434`). Pull at least one chat model and
 one embedding model, for example:
 
 ```bash
-ollama pull qwen2.5:7b-instruct
+ollama pull qwen3.5:9b
 ollama pull nomic-embed-text
 ```
 
